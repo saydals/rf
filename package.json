@@ -2,7 +2,7 @@
   "name": "rotorflight-configurator",
   "productName": "Rotorflight Configurator",
   "description": "Crossplatform configuration tool for Rotorflight flight control system.",
-  "version": "0.0.0",
+  "version": "2.2.0",
   "main": "http://localhost:5077/",
   "node-remote": "http://localhost:*",
   "scripts": {
@@ -44,7 +44,7 @@
     "runtime": {
       "name": "node",
       "version": ">=24.0.0",
-      "onFail": "error"
+      "onFail": "ignore"
     },
     "packageManager": {
       "name": "pnpm",

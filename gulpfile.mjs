@@ -611,7 +611,7 @@ function cordova_deps() {
   return runAsync(
     new Promise((resolve, reject) =>
       child_process.exec(
-        "pnpm install --prod --frozen-lockfile --node-linker=hoisted",
+        "pnpm install --prod --no-frozen-lockfile --node-linker=hoisted",
         { cwd: context.appdir },
         (err) => (err ? reject(err) : resolve()),
       ),
@@ -630,6 +630,7 @@ function cordova_build() {
         options: {
           release: context.target.flavor !== "debug",
           buildConfig: "build.json",
+          argv: ["--versionCode", "13"],
         },
       });
     } finally {

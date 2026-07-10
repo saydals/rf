@@ -56,6 +56,9 @@ export async function handleConnectClick() {
                     CONFIGURATOR.virtualFwVersion = $('#firmware-version-dropdown :selected').data('fw');
 
                     serial.connect('virtual', {}, onOpenVirtual);
+                } else if (selectedPort.data().isBLE) {
+                    // BLE 연결 (baudrate 불필요)
+                    serial.connect(portName, {}, onOpen);
                 } else {
                     serial.connect(portName, {bitrate: selected_baud}, onOpen);
                 }
@@ -102,6 +105,12 @@ export function initializeSerialBackend() {
         }
     };
 
+    // Cordova 환경에서 BLE 스캔 버튼 표시
+    if (GUI.isCordova()) {
+        $('#ble-scan-btn').addClass('visible');
+    }
+
+
     GUI.updateManualPortVisibility();
 
     $('#port-override').on("change", function() {
@@ -112,6 +121,25 @@ export function initializeSerialBackend() {
 
     $('div#port-picker #port').on("change", function() {
         GUI.updateManualPortVisibility();
+    });
+
+    // BLE 스캔 버튼 (Cordova 전용)
+    $('#ble-scan-btn a').on('click', function(e) {
+        e.preventDefault();
+        const btn = $(this);
+        btn.text(i18n.getMessage('bleScanning'));
+        btn.addClass('disabled');
+
+        serial.scanBLEDevices(function (devices) {
+            btn.text(i18n.getMessage('bleScan'));
+            btn.removeClass('disabled');
+
+            if (devices && devices.length > 0) {
+                console.log(`BLE scan complete: ${devices.length} device(s) found`);
+            } else {
+                console.log('BLE scan complete: no devices found');
+            }
+        });
     });
 
     $('div.connect_controls a.connect').on("click", function () {

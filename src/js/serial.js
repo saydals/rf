@@ -3,6 +3,21 @@ import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
 import { checkChromeRuntimeError } from "@/js/utils/common.js";
+import {
+    bleConnect,
+    bleDisconnect,
+    autoDetectProfile,
+    bleStartNotification,
+    bleStopNotification,
+    bleWrite,
+    bleRequestMtu,
+    bleScan,
+    bleIsEnabled,
+    fragmentMspFrame,
+    createMspReassembler,
+    BLE_DEFAULT_MTU,
+    BLE_REQUESTED_MTU,
+} from "@/js/ble_central.js";
 
 export const serial = {
     connected:      false,
@@ -12,9 +27,17 @@ export const serial = {
     bytesReceived:  0,
     bytesSent:      0,
     failed:         0,
-    connectionType: 'serial', // 'serial' or 'tcp' or 'virtual'
+    connectionType: 'serial', // 'serial' or 'tcp' or 'virtual' or 'ble'
     connectionIP:   '127.0.0.1',
     connectionPort: 5761,
+
+    // BLE 전용 상태
+    bleDevice:       null,     // 연결된 BLE 디바이스 객체
+    bleServiceUUID:  null,     // 발견된 MSP 서비스 UUID
+    bleTxCharUUID:   null,     // TX 특성 UUID
+    bleRxCharUUID:   null,     // RX 특성 UUID
+    bleMtu:          BLE_DEFAULT_MTU,  // 협상된 MTU
+    bleRxBuffer:     null,     // MSP 프레임 재조립기
 
     transmitting:   false,
     outputBuffer:   [],
@@ -26,6 +49,9 @@ export const serial = {
             self.connectTcp(testUrl[1], testUrl[2], options, callback);
         } else if (path === 'virtual') {
             self.connectVirtual(callback);
+        } else if (path.startsWith('ble:')) {
+            const deviceId = path.substring(4);
+            self.connectBLE(deviceId, options, callback);
         } else {
             self.connectSerial(path, options, callback);
         }
@@ -213,6 +239,133 @@ export const serial = {
             callback?.();
         }
     },
+    connectBLE: function (deviceId, options, callback) {
+        const self = this;
+        self.connectionType = 'ble';
+        self.bleRxBuffer = createMspReassembler(function (frame) {
+            // 완성된 MSP 프레임을 onReceive 리스너들에게 전달
+            for (let i = 0; i < self.onReceive.listeners.length; i++) {
+                try {
+                    self.onReceive.listeners[i]({
+                        data: frame,
+                        connectionType: 'ble',
+                    });
+                } catch (e) {
+                    console.error('BLE onReceive listener error:', e);
+                }
+            }
+            self.bytesReceived += frame.byteLength;
+        });
+
+        bleConnect(deviceId,
+            // onConnect
+            function (device) {
+                if (self.openCanceled) {
+                    self.connectBLECleanup();
+                    if (callback) callback(false);
+                    return;
+                }
+
+                self.connected = true;
+                self.connectionId = deviceId;
+                self.bleDevice = device;
+                self.bytesReceived = 0;
+                self.bytesSent = 0;
+                self.failed = 0;
+
+                // connect() 콜백의 peripheral 객체에서 TX/RX 특성 자동 감지
+                const profile = autoDetectProfile(device);
+                if (!profile) {
+                    console.error('BLE: could not auto-detect characteristic');
+                    self.connectBLECleanup();
+                    self.disconnect();
+                    if (callback) callback(false);
+                    return;
+                }
+
+                self.bleServiceUUID = profile.service;
+                self.bleTxCharUUID = profile.txChar;
+                self.bleRxCharUUID = profile.rxChar;
+
+                // MTU 247 먼저 요청 (순차 실행으로 GATT 충돌 방지)
+                bleRequestMtu(deviceId, BLE_REQUESTED_MTU,
+                    function(mtu) { 
+                        self.bleMtu = mtu; 
+                        console.log('BLE MTU='+mtu); 
+                        startNotifyAndExit();
+                    },
+                    function(error) {
+                        console.warn('BLE MTU request failed:', error);
+                        startNotifyAndExit();
+                    }
+                );
+
+                function startNotifyAndExit() {
+                    bleStartNotification(deviceId, profile.service, profile.rxChar,
+                        function (data) {
+                            console.log('BLE: rcvd', data.byteLength, 'bytes');
+                            GUI.log(`BLE data: ${data.byteLength}B`);
+                            if (self.bleRxBuffer) self.bleRxBuffer.append(data);
+                        },
+                        function (error) {
+                            console.error('BLE notify error:', error);
+                            if (self.connected) self.errorHandler(error, 'receive');
+                        }
+                    );
+
+                    setTimeout(function () {
+                        const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]);
+                        bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer,
+                            function() {
+                                console.log('BLE: exit');
+                                setTimeout(function () {
+                                    console.log('BLE: opened');
+                                    if (callback) callback({ connectionId: deviceId });
+                                }, 500);
+                            },
+                            function() {
+                                setTimeout(function () {
+                                    if (callback) callback({ connectionId: deviceId });
+                                }, 500);
+                            }
+                        );
+                    }, 500);
+                }
+            },
+            // onDisconnect
+            function (error) {
+                console.log(`BLE: device ${deviceId} disconnected`, error);
+                if (self.connected) {
+                    self.errorHandler('disconnected', 'receive');
+                }
+            },
+            // onError
+            function (error) {
+                console.error(`BLE: connect error: ${error}`);
+                if (callback) callback(false);
+            }
+        );
+    },
+
+    /**
+     * BLE 연결 정리 (notify 중지, 재조립기 해제)
+     */
+    connectBLECleanup: function () {
+        const self = this;
+        if (self.bleRxBuffer) {
+            self.bleRxBuffer.reset();
+            self.bleRxBuffer = null;
+        }
+        if (self.bleDevice && self.bleRxCharUUID && self.bleServiceUUID) {
+            bleStopNotification(self.connectionId, self.bleServiceUUID, self.bleRxCharUUID);
+        }
+        self.bleDevice = null;
+        self.bleServiceUUID = null;
+        self.bleTxCharUUID = null;
+        self.bleRxCharUUID = null;
+        self.bleMtu = BLE_DEFAULT_MTU;
+    },
+
     disconnect: function (callback) {
         const self = this;
         self.connected = false;
@@ -227,7 +380,20 @@ export const serial = {
             for (let i = (self.onReceiveError.listeners.length - 1); i >= 0; i--) {
                 self.onReceiveError.removeListener(self.onReceiveError.listeners[i]);
             }
-            if (self.connectionType !== 'virtual') {
+            if (self.connectionType === 'ble') {
+                // BLE 연결 해제
+                self.connectBLECleanup();
+                bleDisconnect(self.connectionId, function () {
+                    console.log(`${self.connectionType}: closed connection with device: ${self.connectionId}, Sent: ${self.bytesSent} bytes, Received: ${self.bytesReceived} bytes`);
+                    self.connectionId = false;
+                    if (callback) callback(true);
+                }, function (error) {
+                    console.error(`${self.connectionType}: error closing connection: ${error}`);
+                    self.connectionId = false;
+                    if (callback) callback(false);
+                });
+                return;
+            } else if (self.connectionType !== 'virtual') {
                 if (self.connectionType === 'tcp') {
                     chrome.sockets.tcp.disconnect(self.connectionId, function () {
                         checkChromeRuntimeError();
@@ -262,16 +428,73 @@ export const serial = {
         }
     },
     getDevices: function (callback) {
-        chrome.serial.getDevices(function (devices_array) {
-            const devices = [];
-            devices_array.forEach(function (device) {
-                devices.push({
-                              path: device.path,
-                              displayName: device.displayName,
-                             });
-            });
+        // Cordova 환경에서는 BLE 디바이스도 포함
+        if (GUI.isCordova() && typeof ble !== 'undefined') {
+            // BLE 디바이스 스캔 결과도 포함 (직전 스캔 결과가 cachedBLEDevices에 있음)
+            if (this.cachedBLEDevices && this.cachedBLEDevices.length > 0) {
+                const allDevices = [];
+                // 시리얼 장치는 사용 불가 (Cordova에서는 chrome.serial 없음)
+                // BLE 장치만 반환
+                this.cachedBLEDevices.forEach(function (device) {
+                    allDevices.push({
+                        path: 'ble:' + device.id,
+                        displayName: (device.name || 'Unknown') + ' [BLE]',
+                    });
+                });
+                callback(allDevices);
+                return;
+            }
+        }
 
-            callback(devices);
+        // 기본 시리얼 장치 목록
+        if (typeof chrome !== 'undefined' && chrome.serial && chrome.serial.getDevices) {
+            chrome.serial.getDevices(function (devices_array) {
+                const devices = [];
+                devices_array.forEach(function (device) {
+                    devices.push({
+                                  path: device.path,
+                                  displayName: device.displayName,
+                                 });
+                });
+
+                callback(devices);
+            });
+        } else {
+            callback([]);
+        }
+    },
+
+    /**
+     * BLE 디바이스 스캔 결과 캐시 (getDevices에서 사용)
+     */
+    cachedBLEDevices: [],
+
+    /**
+     * BLE 전용 스캔 함수 (port_handler에서 호출)
+     */
+    scanBLEDevices: function (callback) {
+        const self = this;
+        bleIsEnabled(function () {
+            bleScan(8,
+                null, // onDevice - 실시간 표시 불필요
+                function (devices) {
+                    self.cachedBLEDevices = devices;
+                    const mapped = devices.map(function (d) {
+                        return {
+                            path: 'ble:' + d.id,
+                            displayName: (d.name || 'Unknown') + ' [BLE]',
+                        };
+                    });
+                    if (callback) callback(mapped);
+                },
+                function (error) {
+                    console.error('BLE scan failed:', error);
+                    if (callback) callback([]);
+                }
+            );
+        }, function (error) {
+            console.warn('BLE is not enabled:', error);
+            if (callback) callback([]);
         });
     },
     getInfo: function (callback) {
@@ -282,7 +505,6 @@ export const serial = {
         const self = this;
         self.outputBuffer.push({'data': data, 'callback': callback});
         function _send() {
-            // store inside separate variables in case array gets destroyed
             const _data = self.outputBuffer[0].data;
             const _callback = self.outputBuffer[0].callback;
 
@@ -297,56 +519,94 @@ export const serial = {
                 return;
             }
 
-            const sendFn = (self.connectionType === 'serial') ? chrome.serial.send : chrome.sockets.tcp.send;
-            sendFn(self.connectionId, _data, function (sendInfo) {
-                checkChromeRuntimeError();
+            if (self.connectionType === 'ble') {
+                // BLE 전송: MTU 단편화
+                const fragments = fragmentMspFrame(_data, self.bleMtu);
+                let sentCount = 0;
+                const totalBytes = _data.byteLength;
 
-                if (sendInfo === undefined) {
-                    console.log('undefined send error');
-                    if (_callback) {
-                        _callback({
-                            bytesSent: 0,
-                            error: 'undefined',
-                        });
-                    }
-                    return;
-                }
-
-                if (self.connectionType === 'tcp' && sendInfo.resultCode < 0) {
-                    self.errorHandler(sendInfo.resultCode, 'send');
-                    return;
-                }
-
-                // track sent bytes for statistics
-                self.bytesSent += sendInfo.bytesSent;
-
-                // fire callback
-                if (_callback) {
-                    _callback(sendInfo);
-                }
-
-                // remove data for current transmission from the buffer
-                self.outputBuffer.shift();
-
-                // if there is any data in the queue fire send immediately, otherwise stop trasmitting
-                if (self.outputBuffer.length) {
-                    // keep the buffer withing reasonable limits
-                    if (self.outputBuffer.length > 100) {
-                        let counter = 0;
-
-                        while (self.outputBuffer.length > 100) {
-                            self.outputBuffer.pop();
-                            counter++;
+                function sendNextFragment() {
+                    if (sentCount >= fragments.length) {
+                        // 모든 프래그먼트 전송 완료
+                        self.bytesSent += totalBytes;
+                        if (_callback) {
+                            _callback({ bytesSent: totalBytes });
                         }
-
-                        console.log(`${self.connectionType}: send buffer overflowing, dropped: ${counter}`);
+                        self.outputBuffer.shift();
+                        if (self.outputBuffer.length) {
+                            _send();
+                        } else {
+                            self.transmitting = false;
+                        }
+                        return;
                     }
 
-                    _send();
-                } else {
-                    self.transmitting = false;
+                    bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
+                        fragments[sentCount],
+                        function () {
+                            sentCount++;
+                            sendNextFragment();
+                        },
+                        function (error) {
+                            console.error('BLE send error:', error);
+                            if (_callback) {
+                                _callback({ bytesSent: 0, error: error });
+                            }
+                            self.outputBuffer.shift();
+                            if (self.outputBuffer.length) {
+                                _send();
+                            } else {
+                                self.transmitting = false;
+                            }
+                        }
+                    );
                 }
-            });
+
+                sendNextFragment();
+            } else {
+                const sendFn = (self.connectionType === 'serial') ? chrome.serial.send : chrome.sockets.tcp.send;
+                sendFn(self.connectionId, _data, function (sendInfo) {
+                    checkChromeRuntimeError();
+
+                    if (sendInfo === undefined) {
+                        console.log('undefined send error');
+                        if (_callback) {
+                            _callback({
+                                bytesSent: 0,
+                                error: 'undefined',
+                            });
+                        }
+                        return;
+                    }
+
+                    if (self.connectionType === 'tcp' && sendInfo.resultCode < 0) {
+                        self.errorHandler(sendInfo.resultCode, 'send');
+                        return;
+                    }
+
+                    self.bytesSent += sendInfo.bytesSent;
+
+                    if (_callback) {
+                        _callback(sendInfo);
+                    }
+
+                    self.outputBuffer.shift();
+
+                    if (self.outputBuffer.length) {
+                        if (self.outputBuffer.length > 100) {
+                            let counter = 0;
+                            while (self.outputBuffer.length > 100) {
+                                self.outputBuffer.pop();
+                                counter++;
+                            }
+                            console.log(`${self.connectionType}: send buffer overflowing, dropped: ${counter}`);
+                        }
+                        _send();
+                    } else {
+                        self.transmitting = false;
+                    }
+                });
+            }
         }
 
         if (!self.transmitting) {
@@ -358,18 +618,33 @@ export const serial = {
         listeners: [],
 
         addListener: function (function_reference) {
-            const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
-            chromeType.onReceive.addListener(function_reference);
+            // BLE: chrome API 없이 리스너만 저장 (데이터는 notification에서 직접 전달)
+            if (serial.connectionType !== 'ble') {
+                const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
+                if (chromeType && chromeType.onReceive) {
+                    chromeType.onReceive.addListener(function_reference);
+                }
+            }
             this.listeners.push(function_reference);
         },
         removeListener: function (function_reference) {
-            const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
-            for (let i = (this.listeners.length - 1); i >= 0; i--) {
-                if (this.listeners[i] == function_reference) {
-                    chromeType.onReceive.removeListener(function_reference);
-
-                    this.listeners.splice(i, 1);
-                    break;
+            if (serial.connectionType !== 'ble') {
+                const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
+                for (let i = (this.listeners.length - 1); i >= 0; i--) {
+                    if (this.listeners[i] == function_reference) {
+                        if (chromeType && chromeType.onReceive) {
+                            chromeType.onReceive.removeListener(function_reference);
+                        }
+                        this.listeners.splice(i, 1);
+                        break;
+                    }
+                }
+            } else {
+                for (let i = (this.listeners.length - 1); i >= 0; i--) {
+                    if (this.listeners[i] == function_reference) {
+                        this.listeners.splice(i, 1);
+                        break;
+                    }
                 }
             }
         }
@@ -378,18 +653,32 @@ export const serial = {
         listeners: [],
 
         addListener: function (function_reference) {
-            const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
-            chromeType.onReceiveError.addListener(function_reference);
+            if (serial.connectionType !== 'ble') {
+                const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
+                if (chromeType && chromeType.onReceiveError) {
+                    chromeType.onReceiveError.addListener(function_reference);
+                }
+            }
             this.listeners.push(function_reference);
         },
         removeListener: function (function_reference) {
-            const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
-            for (let i = (this.listeners.length - 1); i >= 0; i--) {
-                if (this.listeners[i] == function_reference) {
-                    chromeType.onReceiveError.removeListener(function_reference);
-
-                    this.listeners.splice(i, 1);
-                    break;
+            if (serial.connectionType !== 'ble') {
+                const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
+                for (let i = (this.listeners.length - 1); i >= 0; i--) {
+                    if (this.listeners[i] == function_reference) {
+                        if (chromeType && chromeType.onReceiveError) {
+                            chromeType.onReceiveError.removeListener(function_reference);
+                        }
+                        this.listeners.splice(i, 1);
+                        break;
+                    }
+                }
+            } else {
+                for (let i = (this.listeners.length - 1); i >= 0; i--) {
+                    if (this.listeners[i] == function_reference) {
+                        this.listeners.splice(i, 1);
+                        break;
+                    }
                 }
             }
         }

@@ -40,6 +40,11 @@ PortHandler.check = function () {
     self.check_usb_devices();
     self.check_serial_devices();
 
+    // Cordova 환경에서 BLE 디바이스 스캔 (주기적 갱신)
+    if (GUI.isCordova()) {
+        self.check_ble_devices();
+    }
+
     GUI.updateManualPortVisibility();
 
     setTimeout(function () {
@@ -88,6 +93,14 @@ PortHandler.check_serial_devices = function () {
             self.detectPort(currentPorts);
         }
     });
+};
+
+PortHandler.check_ble_devices = function () {
+    const self = this;
+
+    // BLE 디바이스 스캔은 BLE Scan 버튼을 통해 수동으로만 수행
+    // 여기서는 cachedBLEDevices가 갱신되었는지만 확인
+    // (getDevices()가 cachedBLEDevices를 자동으로 반환)
 };
 
 PortHandler.check_usb_devices = function (callback) {
@@ -262,10 +275,11 @@ PortHandler.updatePortSelect = function (ports) {
             portText = ports[i].path;
         }
 
+        const isBLE = ports[i].path.startsWith('ble:');
         this.portPickerElement.append($("<option/>", {
             value: ports[i].path,
             text: portText,
-            data: {isManual: false},
+            data: {isManual: false, isBLE: isBLE},
         }));
     }
 

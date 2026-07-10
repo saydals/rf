@@ -2686,3 +2686,24 @@ input {
         margin-right: 0 !important;
     }
 }
+/* BLE 스캔 버튼 (기본 숨김, Cordova 모드에서 JS로 표시) */
+#ble-scan-btn {
+    display: none;
+    margin: 6px 0 0 0;
+    text-align: center;
+}
+
+#ble-scan-btn.visible {
+    display: block;
+}
+
+#ble-scan-btn a.regular-button {
+    display: inline-block;
+    width: auto;
+    min-width: 100px;
+    padding: 6px 16px;
+    font-size: 12px;
+    line-height: 20px;
+}
+
+

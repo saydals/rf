@@ -7966,5 +7966,13 @@
     },
     "presetsDontShowAgain": {
         "message": "Don't show again"
+    },
+    "bleScan": {
+        "message": "BLE Scan",
+        "description": "Button label to start BLE device scan (Cordova/APK only)"
+    },
+    "bleScanning": {
+        "message": "Scanning...",
+        "description": "Button label while BLE scanning is in progress"
     }
 }
