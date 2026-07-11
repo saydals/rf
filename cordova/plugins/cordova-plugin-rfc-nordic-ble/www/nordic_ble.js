@@ -65,7 +65,27 @@ function execAsync(service, action, args) {
 }
 
 
-class NordicBle extends EventTarget {
+// Simple EventEmitter (EventTarget not available in all WebViews)
+class EventEmitter {
+    constructor() { this._listeners = {}; }
+    addEventListener(type, handler) {
+        if (!this._listeners[type]) this._listeners[type] = [];
+        this._listeners[type].push(handler);
+    }
+    removeEventListener(type, handler) {
+        const list = this._listeners[type];
+        if (list) {
+            const idx = list.indexOf(handler);
+            if (idx >= 0) list.splice(idx, 1);
+        }
+    }
+    dispatchEvent(event) {
+        const list = this._listeners[event.type];
+        if (list) list.forEach(h => h(event));
+    }
+}
+
+class NordicBle extends EventEmitter {
     constructor() {
         super();
         this.connected = false;
