@@ -358,33 +358,26 @@ export const MSP = {
         }
 
         if (!requestExists) {
-            obj.retryCount = 0;
-            obj.timeouts = [3000, 6000]; // 3s, 6s retry (bluetooth friendly, no infinite loop)
-            const retry = function () {
-                console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab} retry: ${obj.retryCount + 1}/${obj.timeouts.length}`);
+            obj.timer = setInterval(function () {
+                console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab}`);
 
+                // cancel request if MSP communication is not possible
                 if (!serial.connected || CONFIGURATOR.cliEngineActive) {
                     console.log('Cancelling MSP request');
-                    const i = MSP.callbacks.indexOf(obj);
+
+                    const i = MSP.callbacks.findIndex(obj);
                     if (i > -1) MSP.callbacks.splice(i, 1);
-                    clearTimeout(obj.timer);
-                    if (doCallbackOnError) obj.callback?.();
+                    clearInterval(obj.timer);
+
+                    if (doCallbackOnError) {
+                      obj.callback?.();
+                    }
+
                     return;
                 }
 
                 serial.send(bufferOut, false);
-                
-                obj.retryCount++;
-                if (obj.retryCount < obj.timeouts.length) {
-                    obj.timer = setTimeout(retry, obj.timeouts[obj.retryCount]);
-                } else {
-                    console.warn(`MSP request failed after retries: ${code} tab: ${GUI.active_tab}`);
-                    const i = MSP.callbacks.indexOf(obj);
-                    if (i > -1) MSP.callbacks.splice(i, 1);
-                    if (doCallbackOnError) obj.callback?.();
-                }
-            };
-            obj.timer = setTimeout(retry, obj.timeouts[0]);
+            }, 1000); // 1s retry interval
         }
 
         MSP.callbacks.push(obj);
