@@ -242,6 +242,8 @@ public class NordicBlePlugin extends CordovaPlugin {
         }
         JSONArray devices = new JSONArray();
         for (DiscoveredDevice d : discoveredDevices.values()) {
+            // 이름 없는 장치는 목록에서 제외 (name=null 또는 address로 대체된 경우)
+            if (d.name == null || d.name.isEmpty() || d.name.equals(d.address)) continue;
             JSONObject obj = new JSONObject();
             try {
                 obj.put("address", d.address);
