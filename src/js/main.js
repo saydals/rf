@@ -518,27 +518,4 @@ export function showErrorDialog(message) {
     dialog.showModal();
 }
 
-export function showTabExitDialog(tab, callback) {
-    const dialog = $('.dialogTabExit')[0];
-
-    function close() {
-        $('.tabExitSaveBtn').off('click');
-        $('.tabExitRevertBtn').off('click');
-        $('.tabExitCancelBtn').off('click');
-        dialog.close();
-    }
-
-    $('.tabExitSaveBtn').click(function() {
-        close();
-        tab.save(callback);
-    });
-    $('.tabExitRevertBtn').click(function() {
-        close();
-        tab.revert(callback);
-    });
-    $('.tabExitCancelBtn').click(function() {
-        close();
-    });
-
-    dialog.showModal();
-};
+export function showTabExitDialog(tab, callback) { return tab.revert(callback); }
