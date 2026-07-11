@@ -139,6 +139,8 @@ export function initializeSerialBackend() {
             } else {
                 console.log('BLE scan complete: no devices found');
             }
+            // 포트 드롭다운 갱신 (BLE 장치 포함)
+            PortHandler.check_serial_devices();
         });
     });
 

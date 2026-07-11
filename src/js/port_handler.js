@@ -35,7 +35,7 @@ PortHandler.initialize = function (showAllPorts) {
 };
 
 PortHandler.check = function () {
-    const self = this;
+    const _self = this;
 
     self.check_usb_devices();
     self.check_serial_devices();
@@ -56,9 +56,10 @@ function portRecognized(portName, pathSelect) {
     if (portName) {
             const isWindows = (GUI.operating_system === 'Windows');
             const isTty = pathSelect.includes('tty');
+            const isBLE = pathSelect.startsWith("ble:");
             const deviceRecognized = portName.includes('STM') || portName.includes('CP210');
             const legacyDeviceRecognized = portName.includes('usb');
-            if (isWindows && deviceRecognized || isTty && (deviceRecognized || legacyDeviceRecognized)) {
+            if (isWindows && deviceRecognized || isTty && (deviceRecognized || legacyDeviceRecognized) || isBLE) {
                 return true;
             }
     }
@@ -77,7 +78,7 @@ PortHandler.showAllPorts = function(showAllPorts) {
 };
 
 PortHandler.check_serial_devices = function () {
-    const self = this;
+    const _self = this;
 
     serial.getDevices(function(currentPorts) {
         if (!self.showingAllPorts) {
@@ -96,7 +97,7 @@ PortHandler.check_serial_devices = function () {
 };
 
 PortHandler.check_ble_devices = function () {
-    const self = this;
+    const _self = this;
 
     // BLE 디바이스 스캔은 BLE Scan 버튼을 통해 수동으로만 수행
     // 여기서는 cachedBLEDevices가 갱신되었는지만 확인
@@ -104,7 +105,7 @@ PortHandler.check_ble_devices = function () {
 };
 
 PortHandler.check_usb_devices = function (callback) {
-    const self = this;
+    const _self = this;
     chrome.usb.getDevices(usbDevices, function (result) {
 
         const dfuElement = self.portPickerElement.children("[value='DFU']");
@@ -165,7 +166,7 @@ PortHandler.check_usb_devices = function (callback) {
  * It will also fire any registered port removal callbacks, then finally update the port selector.
  */
 PortHandler.removePort = function(currentPorts) {
-    const self = this;
+    const _self = this;
     const removePorts = self.array_difference(self.initialPorts, currentPorts);
 
     if (removePorts.length) {
@@ -203,7 +204,7 @@ PortHandler.removePort = function(currentPorts) {
 
 // detectPort accepts a port array and attempts to recognize a port and auto-connect to it (if enabled)
 PortHandler.detectPort = function(currentPorts) {
-    const self = this;
+    const _self = this;
     const newPorts = self.array_difference(currentPorts, self.initialPorts);
 
     if (newPorts.length) {
@@ -342,7 +343,7 @@ PortHandler.setPortsInputWidth = function() {
 };
 
 PortHandler.port_detected = function(name, code, timeout, ignore_timeout) {
-    const self = this;
+    const _self = this;
     const obj = {'name': name,
                  'code': code,
                  'timeout': (timeout) ? timeout : 10000,
@@ -372,7 +373,7 @@ PortHandler.port_detected = function(name, code, timeout, ignore_timeout) {
 };
 
 PortHandler.port_removed = function (name, code, timeout, ignore_timeout) {
-    const self = this;
+    const _self = this;
     const obj = {'name': name,
                  'code': code,
                  'timeout': (timeout) ? timeout : 10000,

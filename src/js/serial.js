@@ -272,9 +272,10 @@ export const serial = {
             self.bytesReceived += frame.byteLength;
         });
 
+        console.log(`BLE: connecting to deviceId=${deviceId}`);
         const nordicBle = getNordicBle();
         if (!nordicBle) {
-            console.error('BLE: NordicBle plugin not available');
+            console.error('BLE: NordicBle plugin not available for connect');
             if (callback) callback(false);
             return;
         }
@@ -333,7 +334,8 @@ export const serial = {
                 }
             },
             function (error) {
-                console.error(`BLE: connect error: ${error}`);
+                console.error(`BLE: connect error (deviceId=${deviceId}):`, error);
+                GUI.log(`BLE connect failed: ${error}`);
                 if (callback) callback(false);
             }
         );
@@ -434,7 +436,7 @@ export const serial = {
                 this.cachedBLEDevices.forEach(function (device) {
                     allDevices.push({
                         path: 'ble:' + device.address,
-                        displayName: (device.displayName || device.name || 'Unknown') + ' [BLE]',
+                        displayName: (device.displayName || device.name || device.address || 'Unknown') + (device.serviceUuid ? ' [BLE]' : ' [BLE?]'),
                     });
                 });
                 callback(allDevices);
@@ -478,7 +480,7 @@ export const serial = {
                     const mapped = devices.map(function (d) {
                         return {
                             path: 'ble:' + d.address,
-                            displayName: (d.displayName || d.name || 'Unknown') + ' [BLE]',
+                            displayName: (d.displayName || d.name || d.address || 'Unknown') + (d.serviceUuid ? ' [BLE]' : ' [BLE?]'),
                         };
                     });
                     if (callback) callback(mapped);

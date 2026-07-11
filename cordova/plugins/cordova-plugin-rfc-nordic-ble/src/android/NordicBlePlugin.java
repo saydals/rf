@@ -168,7 +168,7 @@ public class NordicBlePlugin extends CordovaPlugin {
         if (action == null) return false;
         switch (action) {
             case "getDevices":              return handleGetDevices(args, callbackContext);
-            case "connect":                 return handleConnect(args, callbackContext);
+            case "connect":                 Log.i(TAG, "execute: connect"); return handleConnect(args, callbackContext);
             case "disconnect":              return handleDisconnect(args, callbackContext);
             case "send":                    return handleSend(args, callbackContext);
             case "registerEventListener":   return handleRegisterEventListener(args, callbackContext);
@@ -296,6 +296,7 @@ public class NordicBlePlugin extends CordovaPlugin {
     }
 
     private boolean performConnect(JSONArray args, CallbackContext callbackContext) {
+        Log.i(TAG, "performConnect called");
         JSONObject opts = args.optJSONObject(0);
         if (opts == null) { callbackContext.error("connect options are required"); return true; }
         String address       = opts.optString("address", null);
@@ -548,23 +549,37 @@ public class NordicBlePlugin extends CordovaPlugin {
 
     private void handleResult(ScanResult result, boolean allowNameMatch) {
         if (result == null || result.getDevice() == null) return;
+        BluetoothDevice device = result.getDevice();
+        String address = device.getAddress();
+
+        // name: ScanRecord > getDevice().getName() > address
+        String name = null;
+        if (result.getScanRecord() != null) {
+            name = result.getScanRecord().getDeviceName();
+        }
+        if (name == null || name.isEmpty()) {
+            name = device.getName();
+        }
+        if (name == null || name.isEmpty()) {
+            name = address;
+        }
+
+        DiscoveredDevice cached = discoveredDevices.get(address);
+        if (cached != null) { cached.rssi = result.getRssi(); return; }
+
         KnownDevice profile = findProfileForResult(result, allowNameMatch);
-        if (profile == null) {
-            String address = result.getDevice().getAddress();
+        if (profile != null) {
+            DiscoveredDevice d = new DiscoveredDevice(address, name, result.getRssi(), profile);
+            discoveredDevices.put(address, d);
+        } else {
+            KnownDevice generic = new KnownDevice(name, "", "", "");
+            DiscoveredDevice d = new DiscoveredDevice(address, name, result.getRssi(), generic);
+            discoveredDevices.put(address, d);
             if (!loggedUnknownAddresses.contains(address)) {
                 logUnknownResult(result);
                 loggedUnknownAddresses.add(address);
             }
-            return;
         }
-        BluetoothDevice device = result.getDevice();
-        String address = device.getAddress();
-        DiscoveredDevice cached = discoveredDevices.get(address);
-        if (cached != null) { cached.rssi = result.getRssi(); return; }
-        String name = device.getName();
-        if (name == null || name.isEmpty()) name = profile.name;
-        DiscoveredDevice d = new DiscoveredDevice(address, name, result.getRssi(), profile);
-        discoveredDevices.put(address, d);
     }
 
     private KnownDevice findProfileForResult(ScanResult result, boolean allowNameMatch) {

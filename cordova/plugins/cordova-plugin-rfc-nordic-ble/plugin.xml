@@ -51,5 +51,12 @@
              "MTU 247 doesn't take effect" bug described in blegatt.md. -->
         <framework src="no.nordicsemi.android:ble:2.11.0" />
         <framework src="no.nordicsemi.android.support.v18:scanner:1.6.0" />
+
+        <!-- Register native plugin class with Cordova exec bridge -->
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="NordicBle">
+                <param name="android-package" value="org.rotorflight.ble.NordicBlePlugin" />
+            </feature>
+        </config-file>
     </platform>
 </plugin>
