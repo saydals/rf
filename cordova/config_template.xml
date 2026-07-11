@@ -57,11 +57,11 @@
 
         <allow-intent href="market:*"/>
 
-        <!-- BLE 관련 권한 (cordova-plugin-ble-central과 중복되지 않도록 최소화) -->
-        <!-- BLUETOOTH_SCAN, BLUETOOTH_CONNECT는 cordova-plugin-ble-central이 자동 추가함 -->
-        <config-file parent="/manifest" target="AndroidManifest.xml">
-            <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
-        </config-file>
+        <!-- BLE 권한은 cordova-plugin-rfc-nordic-ble/plugin.xml 에서 자동 추가됨:
+             - BLUETOOTH_SCAN, BLUETOOTH_CONNECT (Android 12+)
+             - BLUETOOTH, BLUETOOTH_ADMIN, ACCESS_COARSE/FINE_LOCATION (legacy)
+             - uses-feature android.hardware.bluetooth_le
+             여기서는 중복 선언하지 않는다. -->
 
         <config-file parent="/manifest/application/activity" target="AndroidManifest.xml">
             <intent-filter>

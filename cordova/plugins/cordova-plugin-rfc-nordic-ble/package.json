@@ -1,0 +1,28 @@
+{
+    "name": "cordova-plugin-rfc-nordic-ble",
+    "version": "1.0.0",
+    "description": "Nordic BLE Library based Cordova plugin for Rotorflight Configurator — provides queued GATT operations, MTU 247, and SpeedyBee/CC2541/HM-10/Nordic NRF UART profile support.",
+    "cordova": {
+        "id": "cordova-plugin-rfc-nordic-ble",
+        "platforms": [
+            "android"
+        ]
+    },
+    "keywords": [
+        "cordova",
+        "android",
+        "ble",
+        "bluetooth-le",
+        "nordic",
+        "rotorflight",
+        "msp",
+        "speedybee",
+        "ecosystem:cordova"
+    ],
+    "author": "Rotorflight Configurator contributors",
+    "license": "GPL-3.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/saydals/rf"
+    }
+}

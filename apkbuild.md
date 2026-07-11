@@ -257,14 +257,81 @@ argv: ["--versionCode", "13"]   // ✅ 배열
 adb install app/android/platforms/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### 7. plugin.xml preference Cordova variable merge 오류
+
+**증상:** `cordova_deps` 단계에서 다음 오류 발생:
+```
+Error: Variable(s) missing: ANDROID-ENABLEANDROIDX, ANDROID-ENABLEJETIFIER
+```
+
+**원인:** `plugin.xml`에 `<preference name="android-enableAndroidX" value="true" />`를 선언했지만, Cordova가 이 preference를 변수로 변환할 때 대문자+하이픈 형식(`ANDROID-ENABLEANDROIDX`)을 사용하며, 이 변수가 `config.xml`에 정의되어 있지 않아 머지 실패.
+
+**해결:** `plugin.xml`에서 AndroidX/Jetifier 관련 `<preference>`를 제거한다. cordova-android 10+에서는 이미 기본으로 활성화되어 있다.
+
+### 8. NordicBlePlugin.java JSONException 컴파일 오류
+
+**증상:**
+```
+NordicBlePlugin.java:218: error: exception JSONException is never thrown in body of corresponding try statement
+        } catch (JSONException ignored) { }
+```
+
+**원인:** `args.optJSONObject(0)`와 같은 `opt*` 메서드는 null을 반환할 뿐 `JSONException`을 throw하지 않는다. 불필요한 `catch (JSONException)`으로 인한 컴파일 오류.
+
+**해결:** `catch (JSONException ignored)` → `catch (Exception ignored)`로 변경.
+
+### 9. BLE 디바이스 path prefix 불일치 (bluetooth- vs ble:)
+
+**증상:** BLE 스캔 버튼 클릭 시 아무 반응이 없음. BLE 디바이스가 포트 선택기에 나타나지 않음.
+
+**원인:** `cordova-plugin-rfc-nordic-ble`의 `getDevices()`가 반환하는 디바이스의 `path`는 `"bluetooth-XX:XX:XX:XX:XX"` 형식이다. 그러나 `serial.js`의 `serial.connect()`는 `path.startsWith('ble:')`로 BLE 연결을 판별한다. `bluetooth-` prefix는 이 체크를 통과하지 못해 시리얼 연결 경로로 잘못 라우팅된다.
+
+**해결:** `serial.js`의 `scanBLEDevices()`와 `getDevices()`에서 디바이스 path 생성 시 `NordicBle`의 `path`를 그대로 사용하지 말고 항상 `'ble:' + d.address`로 변환한다:
+```javascript
+// ❌ 잘못된 방식 (NordicBle의 path는 "bluetooth-XX:XX")
+path: d.path || ('ble:' + d.address)
+
+// ✅ 올바른 방식
+path: 'ble:' + d.address
+```
+
+### 10. BLE 디바이스 속성명 변경 (id→address, name→displayName)
+
+**증상:** BLE 스캔 결과가 포트 선택기에 표시되지 않거나 `undefined`로 표시됨.
+
+**원인:** 구 `cordova-plugin-ble-central`은 `{ id, name }` 속성을 반환했지만, 신규 `cordova-plugin-rfc-nordic-ble`은 `{ address, displayName }` 속성을 반환한다. `serial.js`에서 `device.id`, `device.name`을 그대로 사용하면 `undefined`가 된다.
+
+**해결:** `serial.js`의 `scanBLEDevices()`와 `getDevices()`에서 디바이스 속성 참조를 모두 새 형식으로 변경:
+```javascript
+// ❌ 구 형식
+path: 'ble:' + device.id,
+displayName: (device.name || 'Unknown') + ' [BLE]',
+
+// ✅ 신 형식
+path: 'ble:' + d.address,
+displayName: (d.displayName || d.name || 'Unknown') + ' [BLE]',
+```
+
 ## BLE 빌드 참고사항
 
 BLE GATT 기능이 포함된 APK를 빌드할 때의 특이사항:
 
-- `cordova/package_template.json`에 `cordova-plugin-ble-central` 추가 필수
-- `cordova/config_template.xml`에 `<uses-feature android:name="android.hardware.bluetooth_le" />` 추가 필수
-- BLE 권한은 플러그인이 자동 처리하므로 템플릿에 중복 선언 금지
+- `cordova/package_template.json`에 `cordova-plugin-rfc-nordic-ble` (로컬 `file:plugins/cordova-plugin-rfc-nordic-ble` 참조) 추가 필수
+- Nordic BLE 라이브러리(`no.nordicsemi.android:ble:2.11.0`, `no.nordicsemi.android.support.v18:scanner:1.6.0`)는 `plugin.xml`의 `<framework>` 항목으로 자동 추가됨
+- BLE 권한(`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, legacy `BLUETOOTH/ACCESS_COARSE_LOCATION` 등) 및 `<uses-feature bluetooth_le>`는 플러그인 `plugin.xml`이 자동 처리 → `config_template.xml`에 중복 선언 금지
+- `plugin.xml`에 `<preference name="android-enableAndroidX">` 등의 preference를 선언하지 않는다. cordova-android >= 10에서 기본 활성화되며, 직접 선언 시 Cordova variable merge 오류 발생 (Issue 7 참조)
+- 이전 `cordova-plugin-ble-central` 은 더 이상 사용하지 않음 (GATT 큐 미지원으로 인한 MTU 247 협상 실패가 근본 원인 — `blegatt.md` 참조)
 - `app/android/` 디렉토리의 lockfile도 함께 업데이트 필요
+
+### BLE 플러그인 마이그레이션 시 주의사항
+
+1. **디바이스 path 형식**: `cordova-plugin-rfc-nordic-ble`의 `getDevices()`는 `path: "bluetooth-XX:XX:XX:XX:XX"` 형식을 반환한다. `serial.js`의 `serial.connect()`는 `path.startsWith('ble:')`로 BLE 연결을 판별하므로, `scanBLEDevices()`와 `getDevices()`에서 반드시 `path: 'ble:' + d.address`로 변환해야 한다. (Issue 9 참조)
+
+2. **디바이스 속성명 변경**: 구 `cordova-plugin-ble-central`은 `{ id, name }`을 반환했지만, 새 플러그인은 `{ path, address, displayName }`을 반환한다. `serial.js` 내에서 `device.id` → `device.address`, `device.name` → `device.displayName`으로 모두 변경해야 한다. (Issue 10 참조)
+
+3. **MTU/Notify 자동화**: `requestConnectionPriority(HIGH)` + `requestMtu(247)` + `enableNotifications()`가 `NordicBlePlugin.java`의 `BleBridgeManager.initialize()`에서 Nordic 큐를 통해 순차 처리된다. JS 쪽 `bleRequestMtu()`, `bleStartNotification()`, `autoDetectProfile()`은 더 이상 호출할 필요가 없다.
+
+4. **AndroidX/Jetifier**: `plugin.xml`에 `<preference>`로 선언하지 않는다. cordova-android 10+에서 이미 기본 활성화되어 있으며, 명시적 선언 시 `cordova_deps` 단계에서 `Variable(s) missing: ANDROID-ENABLEANDROIDX` 오류가 발생한다.
 
 ## 릴리즈 서명 설정
 

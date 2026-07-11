@@ -6,11 +6,7 @@ import { checkChromeRuntimeError } from "@/js/utils/common.js";
 import {
     bleConnect,
     bleDisconnect,
-    autoDetectProfile,
-    bleStartNotification,
-    bleStopNotification,
     bleWrite,
-    bleRequestMtu,
     bleScan,
     bleIsEnabled,
     fragmentMspFrame,
@@ -18,6 +14,26 @@ import {
     BLE_DEFAULT_MTU,
     BLE_REQUESTED_MTU,
 } from "@/js/ble_central.js";
+
+// NordicBle 인스턴스 접근 (cordova-plugin-rfc-nordic-ble)
+function getNordicBle() {
+    // 먼저 window.NordicBle 확인 (cordova.define 콜백에서 설정됨)
+    if (typeof window !== 'undefined' && window.NordicBle) return window.NordicBle;
+    // cordova.plugins.nordicble 접근으로 lazy-load 트리거 시도
+    try {
+        if (typeof cordova !== 'undefined' && cordova.plugins && cordova.plugins.nordicble) {
+            return cordova.plugins.nordicble;
+        }
+        // cordova.require로 명시적 로딩 시도 (lazy-loading 대비)
+        if (typeof cordova !== 'undefined' && typeof cordova.require === 'function') {
+            const mod = cordova.require("cordova-plugin-rfc-nordic-ble.NordicBle");
+            if (mod) return mod;
+        }
+    } catch(e) {
+        console.warn('[getNordicBle] Plugin loading error:', e);
+    }
+    return null;
+}
 
 export const serial = {
     connected:      false,
@@ -243,7 +259,6 @@ export const serial = {
         const self = this;
         self.connectionType = 'ble';
         self.bleRxBuffer = createMspReassembler(function (frame) {
-            // 완성된 MSP 프레임을 onReceive 리스너들에게 전달
             for (let i = 0; i < self.onReceive.listeners.length; i++) {
                 try {
                     self.onReceive.listeners[i]({
@@ -257,9 +272,23 @@ export const serial = {
             self.bytesReceived += frame.byteLength;
         });
 
+        const nordicBle = getNordicBle();
+        if (!nordicBle) {
+            console.error('BLE: NordicBle plugin not available');
+            if (callback) callback(false);
+            return;
+        }
+
+        self._bleReceiveHandler = function (e) {
+            const data = e.detail;
+            if (data && data.byteLength > 0) {
+                if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+            }
+        };
+        nordicBle.addEventListener('receive', self._bleReceiveHandler);
+
         bleConnect(deviceId,
-            // onConnect
-            function (device) {
+            function (peripheral) {
                 if (self.openCanceled) {
                     self.connectBLECleanup();
                     if (callback) callback(false);
@@ -268,78 +297,41 @@ export const serial = {
 
                 self.connected = true;
                 self.connectionId = deviceId;
-                self.bleDevice = device;
+                self.bleDevice = peripheral;
                 self.bytesReceived = 0;
                 self.bytesSent = 0;
                 self.failed = 0;
 
-                // connect() 콜백의 peripheral 객체에서 TX/RX 특성 자동 감지
-                const profile = autoDetectProfile(device);
-                if (!profile) {
-                    console.error('BLE: could not auto-detect characteristic');
-                    self.connectBLECleanup();
-                    self.disconnect();
-                    if (callback) callback(false);
-                    return;
+                self.bleServiceUUID = peripheral.serviceUuid;
+                self.bleTxCharUUID  = peripheral.writeCharacteristic;
+                self.bleRxCharUUID  = peripheral.notifyCharacteristic;
+                self.bleMtu         = peripheral.mtu || BLE_REQUESTED_MTU;
+
+                console.log(`BLE: connected, MTU=${self.bleMtu}, svc=${self.bleServiceUUID}`);
+                // Revision Patch 3: MTU 상태 로그 개선
+                if (self.bleMtu < BLE_REQUESTED_MTU) {
+                    GUI.log(`BLE connected (MTU ${self.bleMtu} WARNING - expected 247, performance degraded)`);
+                } else {
+                    GUI.log(`BLE connected (MTU ${self.bleMtu}, HIGH priority)`);
                 }
 
-                self.bleServiceUUID = profile.service;
-                self.bleTxCharUUID = profile.txChar;
-                self.bleRxCharUUID = profile.rxChar;
-
-                // MTU 247 먼저 요청 (순차 실행으로 GATT 충돌 방지)
-                bleRequestMtu(deviceId, BLE_REQUESTED_MTU,
-                    function(mtu) { 
-                        self.bleMtu = mtu; 
-                        console.log('BLE MTU='+mtu); 
-                        startNotifyAndExit();
+                const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]);
+                bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer,
+                    function () {
+                        console.log('BLE: exit sent, connection ready');
+                        if (callback) callback({ connectionId: deviceId });
                     },
-                    function(error) {
-                        console.warn('BLE MTU request failed:', error);
-                        startNotifyAndExit();
+                    function () {
+                        if (callback) callback({ connectionId: deviceId });
                     }
                 );
-
-                function startNotifyAndExit() {
-                    bleStartNotification(deviceId, profile.service, profile.rxChar,
-                        function (data) {
-                            console.log('BLE: rcvd', data.byteLength, 'bytes');
-                            GUI.log(`BLE data: ${data.byteLength}B`);
-                            if (self.bleRxBuffer) self.bleRxBuffer.append(data);
-                        },
-                        function (error) {
-                            console.error('BLE notify error:', error);
-                            if (self.connected) self.errorHandler(error, 'receive');
-                        }
-                    );
-
-                    setTimeout(function () {
-                        const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]);
-                        bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer,
-                            function() {
-                                console.log('BLE: exit');
-                                setTimeout(function () {
-                                    console.log('BLE: opened');
-                                    if (callback) callback({ connectionId: deviceId });
-                                }, 500);
-                            },
-                            function() {
-                                setTimeout(function () {
-                                    if (callback) callback({ connectionId: deviceId });
-                                }, 500);
-                            }
-                        );
-                    }, 500);
-                }
             },
-            // onDisconnect
             function (error) {
                 console.log(`BLE: device ${deviceId} disconnected`, error);
                 if (self.connected) {
                     self.errorHandler('disconnected', 'receive');
                 }
             },
-            // onError
             function (error) {
                 console.error(`BLE: connect error: ${error}`);
                 if (callback) callback(false);
@@ -356,8 +348,12 @@ export const serial = {
             self.bleRxBuffer.reset();
             self.bleRxBuffer = null;
         }
-        if (self.bleDevice && self.bleRxCharUUID && self.bleServiceUUID) {
-            bleStopNotification(self.connectionId, self.bleServiceUUID, self.bleRxCharUUID);
+        // NordicBle 'receive' 이벤트 리스너 제거
+        const nordicBle = getNordicBle();
+        if (nordicBle && self._bleReceiveHandler) {
+            try { nordicBle.removeEventListener('receive', self._bleReceiveHandler); }
+            catch (e) { console.warn('BLE: failed to remove receive listener:', e); }
+            self._bleReceiveHandler = null;
         }
         self.bleDevice = null;
         self.bleServiceUUID = null;
@@ -429,7 +425,7 @@ export const serial = {
     },
     getDevices: function (callback) {
         // Cordova 환경에서는 BLE 디바이스도 포함
-        if (GUI.isCordova() && typeof ble !== 'undefined') {
+        if (GUI.isCordova() && getNordicBle()) {
             // BLE 디바이스 스캔 결과도 포함 (직전 스캔 결과가 cachedBLEDevices에 있음)
             if (this.cachedBLEDevices && this.cachedBLEDevices.length > 0) {
                 const allDevices = [];
@@ -437,8 +433,8 @@ export const serial = {
                 // BLE 장치만 반환
                 this.cachedBLEDevices.forEach(function (device) {
                     allDevices.push({
-                        path: 'ble:' + device.id,
-                        displayName: (device.name || 'Unknown') + ' [BLE]',
+                        path: 'ble:' + device.address,
+                        displayName: (device.displayName || device.name || 'Unknown') + ' [BLE]',
                     });
                 });
                 callback(allDevices);
@@ -481,8 +477,8 @@ export const serial = {
                     self.cachedBLEDevices = devices;
                     const mapped = devices.map(function (d) {
                         return {
-                            path: 'ble:' + d.id,
-                            displayName: (d.name || 'Unknown') + ' [BLE]',
+                            path: 'ble:' + d.address,
+                            displayName: (d.displayName || d.name || 'Unknown') + ' [BLE]',
                         };
                     });
                     if (callback) callback(mapped);

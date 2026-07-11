@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        id="cordova-plugin-rfc-nordic-ble"
+        version="1.0.0">
+
+    <name>RFC Nordic BLE</name>
+    <description>
+        Nordic BLE Library based Cordova plugin for Rotorflight Configurator.
+        Provides queued GATT operations (requestMtu + enableNotifications + write)
+        via no.nordicsemi.android:ble, eliminating the GATT-queue race condition
+        that makes cordova-plugin-ble-central unusably slow for MSP traffic.
+    </description>
+    <license>GPL-3.0</license>
+    <keywords>cordova,android,ble,bluetooth-le,nordic,rotorflight,msp,speedybee</keywords>
+    <repo>https://github.com/saydals/rf</repo>
+
+    <engines>
+        <engine name="cordova-android" version=">=10.0.0" />
+        <engine name="cordova" version=">=10.0.0" />
+    </engines>
+
+    <platform name="android">
+        <!-- Application manifest entries (permissions + uses-feature) -->
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+            <uses-permission android:name="android.permission.BLUETOOTH"
+                             android:maxSdkVersion="30" />
+            <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+                             android:maxSdkVersion="30" />
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
+                             android:maxSdkVersion="30" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+                             android:maxSdkVersion="30" />
+            <!-- Revision 3.1: neverForLocation flag — no location needed for FC BLE modules -->
+            <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+                             android:usesPermissionFlags="neverForLocation" />
+            <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+            <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+        </config-file>
+
+        <!-- Native plugin source -->
+        <source-file src="src/android/NordicBlePlugin.java"
+                     target-dir="src/org/rotorflight/ble" />
+
+        <!-- JS bridge (loaded by Cordova) -->
+        <js-module src="www/nordic_ble.js" name="NordicBle">
+            <clobbers target="cordova.plugins.nordicble" />
+        </js-module>
+
+        <!-- Nordic BLE Library — provides the GATT request queue that fixes the
+             "MTU 247 doesn't take effect" bug described in blegatt.md. -->
+        <framework src="no.nordicsemi.android:ble:2.11.0" />
+        <framework src="no.nordicsemi.android.support.v18:scanner:1.6.0" />
+    </platform>
+</plugin>
