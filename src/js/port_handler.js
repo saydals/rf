@@ -35,7 +35,7 @@ PortHandler.initialize = function (showAllPorts) {
 };
 
 PortHandler.check = function () {
-    const _self = this;
+    const self = this;
 
     self.check_usb_devices();
     self.check_serial_devices();
@@ -78,7 +78,7 @@ PortHandler.showAllPorts = function(showAllPorts) {
 };
 
 PortHandler.check_serial_devices = function () {
-    const _self = this;
+    const self = this;
 
     serial.getDevices(function(currentPorts) {
         if (!self.showingAllPorts) {
@@ -105,7 +105,7 @@ PortHandler.check_ble_devices = function () {
 };
 
 PortHandler.check_usb_devices = function (callback) {
-    const _self = this;
+    const self = this;
     chrome.usb.getDevices(usbDevices, function (result) {
 
         const dfuElement = self.portPickerElement.children("[value='DFU']");
@@ -166,7 +166,7 @@ PortHandler.check_usb_devices = function (callback) {
  * It will also fire any registered port removal callbacks, then finally update the port selector.
  */
 PortHandler.removePort = function(currentPorts) {
-    const _self = this;
+    const self = this;
     const removePorts = self.array_difference(self.initialPorts, currentPorts);
 
     if (removePorts.length) {
@@ -204,7 +204,7 @@ PortHandler.removePort = function(currentPorts) {
 
 // detectPort accepts a port array and attempts to recognize a port and auto-connect to it (if enabled)
 PortHandler.detectPort = function(currentPorts) {
-    const _self = this;
+    const self = this;
     const newPorts = self.array_difference(currentPorts, self.initialPorts);
 
     if (newPorts.length) {
@@ -343,7 +343,7 @@ PortHandler.setPortsInputWidth = function() {
 };
 
 PortHandler.port_detected = function(name, code, timeout, ignore_timeout) {
-    const _self = this;
+    const self = this;
     const obj = {'name': name,
                  'code': code,
                  'timeout': (timeout) ? timeout : 10000,
@@ -373,7 +373,7 @@ PortHandler.port_detected = function(name, code, timeout, ignore_timeout) {
 };
 
 PortHandler.port_removed = function (name, code, timeout, ignore_timeout) {
-    const _self = this;
+    const self = this;
     const obj = {'name': name,
                  'code': code,
                  'timeout': (timeout) ? timeout : 10000,
