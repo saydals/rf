@@ -30,7 +30,11 @@ const tab = {
 tab.initialize = function (callback) {
     const self = this;
 
-    load_data(load_html);
+    load_html();  // HTML immediately
+    // MSP data loads in background
+    load_data(function () {
+        data_to_form();
+    });
 
     function load_data(callback) {
         MSP.promise(MSPCodes.MSP_STATUS)

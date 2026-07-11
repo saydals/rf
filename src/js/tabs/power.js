@@ -66,7 +66,11 @@ tab.initialize = function (callback) {
         GUI.calibrationManagerConfirmation.destroy();
     }
 
-    load_data().then(load_html);
+    load_html();  // HTML immediately
+    // MSP data loads in background
+    load_data().then(function () {
+        data_to_form();
+    });
 
     function load_html() {
         $('#content').load("/src/tabs/power.html", process_html);
