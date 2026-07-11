@@ -97,7 +97,7 @@ PortHandler.check_serial_devices = function () {
 };
 
 PortHandler.check_ble_devices = function () {
-    const _self = this;
+    const self = this;
 
     // BLE 디바이스 스캔은 BLE Scan 버튼을 통해 수동으로만 수행
     // 여기서는 cachedBLEDevices가 갱신되었는지만 확인
