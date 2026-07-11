@@ -12,7 +12,6 @@ import { MSP } from "@/js/msp.svelte.js";
 import { serial } from "@/js/serial.js";
 import { UI_PHONES } from "@/js/phones_ui.js";
 import { ReleaseChecker } from "@/js/release_checker.js";
-import { serial } from "@/js/serial.js";
 import { handleConnectClick, initializeSerialBackend } from "@/js/serial_backend.js";
 import { TABS } from "@/js/tabs/tabs.js";
 
