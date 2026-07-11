@@ -377,7 +377,7 @@ export const MSP = {
                 }
 
                 serial.send(bufferOut, false);
-            }, 1000); // 1s retry interval
+            }, 2000); // 2s retry interval
         }
 
         MSP.callbacks.push(obj);
