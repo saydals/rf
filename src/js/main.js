@@ -8,6 +8,8 @@ import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
+import { MSP } from "@/js/msp.svelte.js";
+import { serial } from "@/js/serial.js";
 import { UI_PHONES } from "@/js/phones_ui.js";
 import { ReleaseChecker } from "@/js/release_checker.js";
 import { serial } from "@/js/serial.js";
@@ -224,6 +226,10 @@ export function startProcess() {
                     $(self).parent().addClass('active');
 
                     if (TABS[tabName] && !GUI.reboot_in_progress) {
+                        // Clear pending queues
+                        MSP.callbacks.forEach(function(cb) { if (cb.timer) clearTimeout(cb.timer); });
+                        MSP.callbacks = [];
+                        serial.outputBuffer = [];
                         const tabObj = TABS[tabName];
                         GUI.active_tab = tabName;
                         GUI.current_tab = tabObj;
