@@ -4,29 +4,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import stream from "node:stream";
 
-import innoSetup from "@quanle94/innosetup";
-import { ZipArchive } from "archiver";
-import { sync as commandExistsSync } from "command-exists";
 import cordovaPkg from "cordova-lib";
 import { glob } from "glob";
 import gulp from "gulp";
-import deb from "gulp-debian";
 import jeditor from "gulp-json-editor";
 import rename from "gulp-rename";
 import replace from "gulp-replace";
-import logger from "gulplog";
 import minimist from "minimist";
-import nwbuild from "nw-builder";
-import buildRpm from "rpm-builder";
 import source from "vinyl-source-stream";
 import * as vite from "vite";
 
 import pkg from "./package.json" with { type: "json" };
-
-// Replace dev mode paths
-pkg.main = "index.html";
-pkg.window.icon = "images/rf_icon.png";
-delete pkg["node-remote"];
 
 const { cordova } = cordovaPkg;
 
@@ -36,25 +24,12 @@ const BUNDLE_DIR = "./bundle";
 const APP_DIR = "./app";
 const REDIST_DIR = "./redist";
 
-const LINUX_INSTALL_DIR = "/opt/rotorflight";
-
-const NWJS_CACHE_DIR = "nwjs_cache";
-const NWJS_VERSION = "0.109.1";
-const NWJS_ARCH = {
-  x86: "ia32",
-  x86_64: "x64",
-  arm64: "arm64",
-};
-const NWJS_VERSION_MANIFEST = "https://nwjs.io/versions.json";
-
 const context = {};
 parseArgs();
 
 export const app = build_app();
 export const bundle = build_bundle();
 export const redist = build_redist();
-export const dev_client = run_dev_client();
-export const debug = run_debug();
 
 function clean_app() {
   return runAsync(fs.rm(APP_DIR, { recursive: true, force: true }));
@@ -73,9 +48,8 @@ function build_bundle() {
 }
 
 function bundle_vite() {
-  const backend = context.target.platform === "android" ? "cordova" : "nwjs";
   return runAsync(
-    vite.build({ define: { __BACKEND__: JSON.stringify(backend) } }),
+    vite.build({ define: { __BACKEND__: JSON.stringify("cordova") } }),
   );
 }
 
@@ -127,96 +101,7 @@ function helper_build_app_cordova() {
 }
 
 function build_app() {
-  const app_helper =
-    context.target.platform === "android"
-      ? helper_build_app_cordova
-      : helper_build_app_nwjs;
-
-  return gulp.series(clean_app, app_helper());
-}
-
-function helper_build_app_nwjs() {
-  const tasks = [build_bundle(), build_app_nwjs];
-
-  switch (context.target.platform) {
-    case "linux":
-      tasks.push(build_nwjs_unix_permissions);
-      tasks.push(build_nwjs_linux_assets);
-      break;
-
-    case "osx":
-      tasks.push(build_nwjs_unix_permissions);
-      break;
-  }
-
-  return gulp.series(tasks);
-}
-
-function build_app_nwjs() {
-  const { platform, arch, flavor } = context.target;
-  context.appdir = `${APP_DIR}/${platform}_${arch}`;
-
-  const platformOpts = {
-    osx: {
-      icon: "./src/images/rf_icon.icns",
-      CFBundleDisplayName: "Rotorflight Configurator",
-    },
-    win: {
-      icon: "./src/images/rf_icon.ico",
-    },
-  };
-
-  return runAsync(
-    nwbuild({
-      platform,
-      arch: NWJS_ARCH[arch],
-      outDir: context.appdir,
-      flavor: flavor === "debug" ? "sdk" : "normal",
-      app: platformOpts[platform],
-      version: NWJS_VERSION,
-      cacheDir: NWJS_CACHE_DIR,
-      glob: false,
-      srcDir: BUNDLE_DIR,
-      manifestUrl: NWJS_VERSION_MANIFEST,
-    }),
-  );
-}
-
-function build_nwjs_linux_assets() {
-  return gulp.src("assets/linux/**").pipe(gulp.dest(context.appdir));
-}
-
-/**
- * Nw.js archives do not have any permissions set for group and other.
- * Apply the correct permissions.
- */
-async function build_nwjs_unix_permissions() {
-  return runAsync(async () => {
-    const ignore = [
-      // bundle - linux
-      `${context.appdir}/package.nw/**/*`,
-      // bundle - osx
-      `${context.appdir}/${pkg.name}.app/Contents/Resources/app.nw/**/*`,
-    ];
-
-    const dirs = await glob(`${context.appdir}/**/*/`, { ignore });
-    for (const dir of dirs) {
-      await fs.chmod(dir, 0o755);
-    }
-
-    const files = await glob(`${context.appdir}/**/*`, { nodir: true, ignore });
-    for (const file of files) {
-      let mode = 0o644;
-
-      const stats = await fs.stat(file);
-      if (stats.mode & fs.constants.S_IXUSR) {
-        mode |=
-          fs.constants.S_IXUSR | fs.constants.S_IXGRP | fs.constants.S_IXOTH;
-      }
-
-      await fs.chmod(file, mode);
-    }
-  });
+  return gulp.series(clean_app, helper_build_app_cordova());
 }
 
 function build_redist() {
@@ -233,301 +118,7 @@ function mkdir_redist() {
 }
 
 function helper_build_redist() {
-  switch (context.target.platform) {
-    case "linux":
-      return build_redist_linux();
-
-    case "osx":
-      return build_redist_osx;
-
-    case "win":
-      return build_redist_win();
-
-    case "android":
-      return build_redist_apk;
-
-    default:
-      return nop;
-  }
-}
-
-function build_redist_linux() {
-  return gulp.parallel(build_redist_tar_xz, build_redist_deb, build_redist_rpm);
-}
-
-function build_redist_tar_xz() {
-  const { platform, arch } = context.target;
-
-  const filename = `${pkg.name}_${pkg.version}_${platform}_${arch}.tar.xz`;
-  const output = `${path.relative(context.appdir, REDIST_DIR)}/${filename}`;
-  const command = `tar -cJf '${output}' --transform 's|^\\./|rotorflight-configurator-${pkg.version}/|' .`;
-
-  return runAsync(
-    new Promise((resolve, reject) =>
-      child_process.exec(command, { cwd: context.appdir }, (err) =>
-        err ? reject(err) : resolve(),
-      ),
-    ),
-  );
-}
-
-function build_redist_deb(done) {
-  const { arch } = context.target;
-
-  if (!commandExistsSync("dpkg-deb")) {
-    logger.warn(
-      `dpkg-deb command not found, not generating deb package for ${arch}`,
-    );
-    done();
-    return;
-  }
-
-  const archmap = {
-    x86: "i386",
-    x86_64: "amd64",
-    arm64: "arm64",
-  };
-
-  return gulp.src([`${context.appdir}/*`]).pipe(
-    deb({
-      package: pkg.name,
-      version: pkg.version,
-      section: "base",
-      priority: "optional",
-      architecture: archmap[arch],
-      maintainer: pkg.author,
-      description: pkg.description,
-      preinst: [`rm -rf ${LINUX_INSTALL_DIR}/${pkg.name}`],
-      postinst: [
-        `chown root:root ${LINUX_INSTALL_DIR}`,
-        `chown -R root:root ${LINUX_INSTALL_DIR}/${pkg.name}`,
-        `xdg-desktop-menu install ${LINUX_INSTALL_DIR}/${pkg.name}/${pkg.name}.desktop`,
-      ],
-      prerm: [`xdg-desktop-menu uninstall ${pkg.name}.desktop`],
-      changelog: [],
-      _target: `${LINUX_INSTALL_DIR}/${pkg.name}`,
-      _out: REDIST_DIR,
-      _copyright: "assets/linux/copyright",
-      _clean: true,
-    }),
-  );
-}
-
-function build_redist_rpm() {
-  const { arch } = context.target;
-
-  if (!commandExistsSync("rpmbuild")) {
-    console.warn(
-      `rpmbuild command not found, not generating rpm package for ${arch}`,
-    );
-    return;
-  }
-
-  const regex = /-/g;
-
-  const archmap = {
-    x86: "i386",
-    x86_64: "x86_64",
-    arm64: "aarch64",
-  };
-
-  const options = {
-    name: pkg.name,
-    version: pkg.version.replace(regex, "_"), // RPM does not like release candidate versions
-    buildArch: archmap[arch],
-    vendor: pkg.author,
-    summary: pkg.description,
-    license: "GNU General Public License v3.0",
-    prefix: "/opt",
-    files: [
-      {
-        cwd: context.appdir,
-        src: "*",
-        dest: `${LINUX_INSTALL_DIR}/${pkg.name}`,
-      },
-    ],
-    postInstallScript: [
-      `xdg-desktop-menu install ${LINUX_INSTALL_DIR}/${pkg.name}/${pkg.name}.desktop`,
-    ],
-    preUninstallScript: [`xdg-desktop-menu uninstall ${pkg.name}.desktop`],
-    tempDir: `${REDIST_DIR}/tmp-rpm-build-${arch}`,
-    keepTemp: false,
-    verbose: false,
-    rpmDest: REDIST_DIR,
-    execOpts: { maxBuffer: 1024 * 1024 * 16 },
-  };
-
-  return runAsync(
-    new Promise((resolve, reject) =>
-      buildRpm(options, (err) => (err ? reject(err) : resolve())),
-    ),
-  );
-}
-
-function build_redist_osx() {
-  return runAsync(async () => {
-    const appdmg = (await import("appdmg")).default;
-
-    const targetPath = `${REDIST_DIR}/${pkg.name}_${pkg.version}_macos_${context.target.arch}.dmg`;
-
-    await new Promise((resolve, reject) => {
-      const builder = appdmg({
-        target: targetPath,
-        basepath: context.appdir,
-        specification: {
-          title: "Rotorflight Configurator",
-          contents: [
-            { x: 448, y: 342, type: "link", path: "/Applications" },
-            {
-              x: 192,
-              y: 344,
-              type: "file",
-              path: `${pkg.name}.app`,
-              name: "Rotorflight Configurator.app",
-            },
-          ],
-          background: `${import.meta.dirname}/assets/osx/dmg-background.png`,
-          format: "UDZO",
-          window: {
-            size: {
-              width: 638,
-              height: 479,
-            },
-          },
-        },
-      });
-
-      builder.on("progress", (info) =>
-        logger.info(
-          info.current +
-            "/" +
-            info.total +
-            " " +
-            info.type +
-            " " +
-            (info.title || info.status),
-        ),
-      );
-      builder.on("error", reject);
-      builder.on("finish", resolve);
-    });
-  });
-}
-
-function build_redist_win() {
-  return gulp.parallel(build_redist_zip, build_redist_exe);
-}
-
-function build_redist_zip() {
-  return runAsync(async () => {
-    const targetPath = `${REDIST_DIR}/${pkg.name}_${pkg.version}_win_${context.target.arch}.zip`;
-    const fd = await fs.open(targetPath, "w");
-    const archive = new ZipArchive();
-    archive.pipe(fd.createWriteStream());
-    archive.directory(context.appdir, `${pkg.name}-${pkg.version}`);
-    await archive.finalize();
-  });
-}
-
-function build_redist_exe() {
-  const { arch } = context.target;
-
-  const parameters = [
-    // Extra parameters to replace inside the iss file
-    `/Dversion=${pkg.version}`,
-    `/DarchName=${arch}`,
-    `/DarchAllowed=${arch === "x86" ? "x86 x64" : "x64"}`,
-    `/DarchInstallIn64bit=${arch === "x86" ? "" : "x64"}`,
-    `/DsourceFolder=${context.appdir}`,
-    `/DtargetFolder=${REDIST_DIR}`,
-
-    // Show only errors in console
-    "/Q",
-
-    // Script file to execute
-    "assets/windows/installer.iss",
-  ];
-
-  return runAsync(
-    new Promise((resolve, reject) =>
-      innoSetup(parameters, {}, (err) => (err ? reject(err) : resolve())),
-    ),
-  );
-}
-
-function run_dev_client() {
-  switch (context.target.platform) {
-    case "android":
-      return () =>
-        runAsync(Promise.reject(Error("android dev client not supported")));
-
-    case "linux":
-    case "osx":
-    case "win":
-      return run_nwjs_dev_client;
-  }
-}
-
-async function set_debug_flavor() {
-  context.target.flavor = "debug";
-}
-
-function run_debug() {
-  const tasks = [set_debug_flavor, build_app()];
-  switch (context.target.platform) {
-    case "android":
-      tasks.push(run_debug_cordova);
-      break;
-
-    case "linux":
-    case "osx":
-    case "win":
-      tasks.push(run_debug_nwjs);
-      break;
-  }
-
-  return gulp.series(...tasks);
-}
-
-function run_debug_nwjs() {
-  const exe = getNwjsExePath(context.target.platform);
-  return new Promise((resolve, reject) =>
-    child_process.execFile(`${context.appdir}/${exe}`, (err) =>
-      err ? reject(err) : resolve(),
-    ),
-  );
-}
-
-function getNwjsExePath(platform) {
-  switch (platform) {
-    case "linux":
-      return pkg.name;
-    case "win":
-      return `${pkg.name}.exe`;
-    case "osx":
-      return `${pkg.name}.app/Contents/MacOS/nwjs`;
-
-    default:
-      throw new Error(`Unsupported NW.js platform: ${platform}`);
-  }
-}
-
-function run_nwjs_dev_client() {
-  const { platform, arch } = context.target;
-
-  return runAsync(
-    nwbuild({
-      mode: "run",
-      platform,
-      arch: NWJS_ARCH[arch],
-      flavor: "sdk",
-      version: NWJS_VERSION,
-      cacheDir: NWJS_CACHE_DIR,
-      glob: false,
-      srcDir: ".",
-      manifestUrl: NWJS_VERSION_MANIFEST,
-    }),
-  );
+  return build_redist_apk;
 }
 
 function run_debug_cordova() {
@@ -641,7 +232,7 @@ function cordova_build() {
 
 function build_redist_apk() {
   const { flavor } = context.target;
-  const filename = `${pkg.name}_${pkg.version}_android.apk`;
+  const filename = "rf-cordova.apk";
   return gulp
     .src(
       `${context.appdir}/platforms/android/app/build/outputs/apk/${flavor}/app-${flavor}.apk`,

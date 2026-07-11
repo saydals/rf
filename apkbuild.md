@@ -1,383 +1,113 @@
-# Rotorflight Configurator APK 빌드 가이드
+# Rotorflight Configurator APK 빌드 가이드 (Cordova)
 
-## 빌드 개요
-
-이 프로젝트는 Cordova 기반 안드로이드 APK 빌드를 지원한다. 빌드 시스템은 Gulp를 사용하며, 아래 명령으로 디버그/릴리즈 APK를 생성할 수 있다.
+Cordova 기반 Android APK 빌드 가이드.
+Capacitor/NW.js 없이 Cordova 전용으로 구성되어 있습니다.
 
 ## 필수 요구사항
 
-### 1. Node.js (>= 24.0.0)
-- 권장: `fnm` (Fast Node Manager) 사용
-- `.nvmrc` 참고: `v25.6.1`
+| 도구 | 버전 | 확인 |
+|------|------|------|
+| Node.js | >= 22.0.0 | `node --version` |
+| pnpm | >= 11.0.0 | `pnpm --version` |
+| Java JDK | 21 | `java -version` |
+| Android SDK | API 35, Build Tools 35.0.0 | `ls $ANDROID_SDK_ROOT/platforms/android-35` |
+| Gradle | 8.10+ | `gradle --version` |
+
+### 환경 변수
 
 ```bash
-# fnm 설치
-curl -fsSL https://fnm.vercel.app/install | bash
-
-# Node.js 설치 및 사용
-fnm install 25.6.1
-fnm use 25.6.1
+export ANDROID_SDK_ROOT=/home/betaflight/android-sdk
+export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
+export PATH=$PATH:/home/betaflight/gradle/gradle-8.10/bin
 ```
 
-### 2. pnpm (>= 11.0.0)
+## 빌드 방법
 
-```bash
-npm install -g pnpm@11
-```
-
-### 3. Java JDK (21 이상)
-- OpenJDK 21 권장
-- `javac`가 PATH에 있어야 함
-
-```bash
-java -version  # 확인
-javac -version  # 확인
-```
-
-### 4. Android SDK
-- 최소 SDK: 24 (Android 7.0)
-- 타겟 SDK: 35 (Android 15)
-- 컴파일 SDK: 35
-- 빌드 툴: 35.0.0
-
-```bash
-# Android SDK 경로 설정
-export ANDROID_HOME=/home/betaflight/Android/Sdk
-export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-```
-
-### 5. Gradle (8.x)
-- cordova-android 14.x와 호환되는 Gradle 버전 필요
-- Gradle 8.10 권장
-
-```bash
-# Gradle 설치 (예: /home/betaflight/gradle/)
-cd /tmp
-curl -fsSL https://services.gradle.org/distributions/gradle-8.10-bin.zip -o gradle.zip
-mkdir -p /home/betaflight/gradle
-unzip -q gradle.zip -d /home/betaflight/gradle
-export PATH=/home/betaflight/gradle/gradle-8.10/bin:$PATH
-```
-
-### 6. Android SDK 라이선스 수락
-
-```bash
-yes | sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-```
-
-## 빌드 환경 변수 설정
-
-매 빌드 전에 다음 환경 변수를 설정해야 한다:
-
-```bash
-# Node.js/fnm
-export PATH="/home/betaflight/.local/share/fnm:$PATH"
-eval "$(fnm env --shell bash)"
-
-# Android SDK
-export ANDROID_HOME=/home/betaflight/Android/Sdk
-export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
-
-# Gradle
-export PATH=/home/betaflight/gradle/gradle-8.10/bin:$PATH
-```
-
-## 의존성 설치 (최초 1회 / 패키지 변경 시)
+### 1. 의존성 설치 (최초 1회)
 
 ```bash
 cd /home/betaflight/rfconfigurator
 pnpm install --frozen-lockfile
 ```
 
-## APK 빌드 명령
+### 2. APK 빌드
 
-### 디버그 APK (서명 불필요, adb install 용)
-
-```bash
-cd /home/betaflight/rfconfigurator
-make android
-```
-
-또는
+**릴리즈 APK (redist에 복사):**
 
 ```bash
-pnpm gulp debug --platform android
+pnpm gulp redist --platform android
 ```
 
-출력 경로:
-```
-app/android/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-### 릴리즈 APK (서명 포함, 배포 용)
-
-릴리즈 빌드는 `build.json`의 keystore 정보로 서명된다:
+**APK만 빌드 (redist 복사 없음):**
 
 ```bash
 pnpm gulp app --platform android
 ```
 
-출력 경로:
-```
-app/android/platforms/android/app/build/outputs/apk/release/app-release.apk
-```
-
-> ⚠️ `pnpm gulp build --platform android` 명령은 존재하지 않는다. `build` 대신 `app` 태스크를 사용한다.
-
-## 디바이스에 설치
+**디버그 APK (서명 불필요):**
 
 ```bash
-adb install app/android/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-adb install app/android/platforms/android/app/build/outputs/apk/release/app-release.apk
+pnpm gulp app --platform android --debug
 ```
 
-> 디바이스가 연결되지 않은 상태에서 `make android` 실행 시 `run_debug_cordova` 태스크는 실패하지만, **APK 자체는 정상 생성**된다. 별도로 `adb install`로 설치하면 된다.
+### 3. 출력 경로
 
-## 빌드 프로세스 상세
+```
+redist/rf-cordova.apk              # 최종 APK (리네임 + redist 복사)
+app/android/platforms/android/app/build/outputs/apk/release/app-release.apk
+app/android/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+```
 
-`make android` (디버그)은 다음 단계를 순차적으로 실행한다:
+## 설치
+
+```bash
+adb install redist/rf-cordova.apk
+```
+
+## 빌드 프로세스
 
 | 단계 | 태스크 | 설명 |
 |------|--------|------|
-| 1 | `set_debug_flavor` | 디버그 플래그 설정 |
-| 2 | `clean_app` | 이전 빌드 정리 |
-| 3 | `clean_bundle` | 번들 정리 |
-| 4 | `bundle_vite` | Vite로 웹 번들 생성 |
-| 5 | `bundle_src` | 소스 리소스 복사 |
-| 6 | `bundle_deps` | 프로덕션 의존성 설치 |
-| 7 | `cordova_copy_www` | 웹 번들을 Cordova www로 복사 |
-| 8 | `cordova_resources` | 안드로이드 리소스 복사 |
-| 9 | `cordova_include_www` | Cordova 스크립트 포함 |
-| 10 | `cordova_copy_src` | Cordova 소스 복사 |
-| 11 | `cordova_rename_src_config` | config.xml 이름 변경 |
-| 12 | `cordova_rename_src_package` | package.json 이름 변경 |
-| 13 | `cordova_packagejson` | 패키지 정보 주입 |
-| 14 | `cordova_configxml` | config.xml 템플릿 변수 치환 |
-| 15 | `cordova_deps` | Cordova 의존성 설치 |
-| 16 | `cordova_build` | Gradle로 APK 빌드 |
-| 17 | `run_debug_cordova` | 디바이스에 설치 시도 (옵션) |
+| 1 | `clean_app` | 이전 app/ 삭제 |
+| 2 | `clean_bundle` | 이전 bundle/ 삭제 |
+| 3 | `bundle_vite` | Vite로 웹 번들 생성 |
+| 4 | `bundle_src` | 소스 리소스 복사 |
+| 5 | `bundle_deps` | 프로덕션 의존성 설치 |
+| 6 | `cordova_copy_www` | 웹 번들을 Cordova www로 복사 |
+| 7 | `cordova_resources` | 안드로이드 리소스 복사 |
+| 8 | `cordova_include_www` | www 디렉토리 설정 |
+| 9 | `cordova_copy_src` | Cordova 소스 복사 |
+| 10 | `cordova_rename_src_config` | config.xml 템플릿 적용 |
+| 11 | `cordova_rename_src_package` | package.json 템플릿 적용 |
+| 12 | `cordova_packagejson` | 패키지 메타데이터 설정 |
+| 13 | `cordova_configxml` | config.xml 변수 치환 |
+| 14 | `cordova_deps` | Cordova 의존성 설치 |
+| 15 | `cordova_build` | Gradle로 APK 빌드 |
 
-릴리즈 빌드(`pnpm gulp app --platform android`)는 위 단계 중 `set_debug_flavor`가 제외되며, Gradle이 `cdvBuildRelease` 태스크를 실행한다.
+## 디렉토리 구조
 
-## 알려진 이슈 및 해결
-
-### 1. versionCode가 0으로 설정되는 문제
-
-**증상:**
 ```
-FAILURE: Build failed with an exception.
-> android.defaultConfig.versionCode is set to 0, but it should be a positive integer.
-```
-
-**해결:** `gulpfile.mjs`의 `cordova_build` 함수에서 `--versionCode`를 Gradle에 직접 전달:
-```javascript
-await cordova.build({
-  platforms: ["android"],
-  options: {
-    release: context.target.flavor !== "debug",
-    buildConfig: "build.json",
-    argv: ["--versionCode", "13"],
-  },
-});
-```
-빌드 명령행에 `-PcdvVersionCode=13`이 자동 추가된다.
-
-### 2. Gradle 미설치 문제
-
-**증상:**
-```
-Could not find an installed version of Gradle either in Android Studio,
-or on your system to install the gradle wrapper.
+rfconfigurator/
+├── gulpfile.mjs              # 빌드 스크립트
+├── vite.config.mjs           # Vite 번들러 설정
+├── package.json              # 의존성
+├── index.html                # 웹 진입점
+├── src/                      # 소스 코드
+├── cordova/                  # Cordova 템플릿
+│   ├── config_template.xml   # Cordova 설정 템플릿
+│   ├── package_template.json # Cordova 패키지 템플릿
+│   ├── build.json            # 서명 설정
+│   ├── release.jks           # 릴리즈 키스토어
+│   └── plugins/              # Cordova 플러그인
+├── public/                   # 정적 리소스
+├── assets/android/           # Android 리소스
+├── locales/                  # i18n 번역
+└── libraries/                # Vendor 라이브러리
 ```
 
-**해결:** 시스템에 Gradle을 별도 설치하고 PATH에 추가한다. (상단 "필수 요구사항" 참고)
+## 참고
 
-### 3. cordova_deps frozen lockfile 실패
+- BLE가 포함된 APK를 빌드하려면 `cordova/package_template.json`에 `cordova-plugin-rfc-nordic-ble` 플러그인이 포함되어 있어야 합니다.
+- APK 버전은 `package.json`의 `version` 필드로 관리됩니다.
+- 릴리즈 빌드는 `cordova/build.json`의 keystore 정보로 서명됩니다.
 
-**증상:**
-```
-Error: Command failed: pnpm install --prod --frozen-lockfile --node-linker=hoisted
-```
-
-**원인:** `app/android/pnpm-lock.yaml`이 `cordova/package_template.json`의 변경사항을 반영하지 못함
-
-**해결 방법 A (사전 준비):**
-```bash
-cd app/android
-pnpm install --no-frozen-lockfile --node-linker=hoisted
-```
-
-**해결 방법 B (gulpfile 수정):**
-`gulpfile.mjs`의 `cordova_deps` 함수에서 `--frozen-lockfile`을 `--no-frozen-lockfile`로 변경:
-```javascript
-// before
-"pnpm install --prod --frozen-lockfile --node-linker=hoisted"
-// after
-"pnpm install --prod --no-frozen-lockfile --node-linker=hoisted"
-```
-
-### 4. Android Manifest merger 충돌
-
-**증상:**
-```
-Manifest merger failed with multiple errors, see logs
-```
-
-**원인:** `cordova/config_template.xml`에 BLE 권한을 명시적으로 선언했는데,
-`cordova-plugin-ble-central` v2.0.0이 자체적으로 동일 권한을 추가하여 중복 충돌 발생.
-
-**해결:** `config_template.xml`에서는 BLE 권한을 선언하지 않는다.
-플러그인이 다음 권한을 자동으로 처리하므로 명시적 선언이 불필요:
-- `android.permission.BLUETOOTH` (maxSdkVersion 30)
-- `android.permission.BLUETOOTH_ADMIN` (maxSdkVersion 30)
-- `android.permission.ACCESS_FINE_LOCATION` (maxSdkVersion 30)
-- `android.permission.ACCESS_COARSE_LOCATION` (maxSdkVersion 28)
-- `android.permission.BLUETOOTH_SCAN` (usesPermissionFlags="neverForLocation")
-- `android.permission.BLUETOOTH_CONNECT`
-
-`<uses-feature android:name="android.hardware.bluetooth_le">` 만 선언하면 된다.
-
-### 5. nopt TypeError: args.slice is not a function
-
-**증상:** `cordova.build()` 호출 시 발생
-
-**해결:** `argv`를 객체가 아닌 **배열 형태**로 전달:
-```javascript
-argv: ["--versionCode", "13"]   // ✅ 배열
-// argv: { versionCode: 13 }     // ❌ 객체 (TypeError 발생)
-```
-
-### 6. run_debug_cordova 실패 (디바이스 미연결)
-
-**증상:** `make android` 마지막 단계에서 `run_debug_cordova`가 실패하지만, 앞선 `cordova_build`는 성공함
-
-**해결:** APK는 정상 생성되었으므로 무시. 별도로 `adb install` 실행:
-```bash
-adb install app/android/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-### 7. plugin.xml preference Cordova variable merge 오류
-
-**증상:** `cordova_deps` 단계에서 다음 오류 발생:
-```
-Error: Variable(s) missing: ANDROID-ENABLEANDROIDX, ANDROID-ENABLEJETIFIER
-```
-
-**원인:** `plugin.xml`에 `<preference name="android-enableAndroidX" value="true" />`를 선언했지만, Cordova가 이 preference를 변수로 변환할 때 대문자+하이픈 형식(`ANDROID-ENABLEANDROIDX`)을 사용하며, 이 변수가 `config.xml`에 정의되어 있지 않아 머지 실패.
-
-**해결:** `plugin.xml`에서 AndroidX/Jetifier 관련 `<preference>`를 제거한다. cordova-android 10+에서는 이미 기본으로 활성화되어 있다.
-
-### 8. NordicBlePlugin.java JSONException 컴파일 오류
-
-**증상:**
-```
-NordicBlePlugin.java:218: error: exception JSONException is never thrown in body of corresponding try statement
-        } catch (JSONException ignored) { }
-```
-
-**원인:** `args.optJSONObject(0)`와 같은 `opt*` 메서드는 null을 반환할 뿐 `JSONException`을 throw하지 않는다. 불필요한 `catch (JSONException)`으로 인한 컴파일 오류.
-
-**해결:** `catch (JSONException ignored)` → `catch (Exception ignored)`로 변경.
-
-### 9. BLE 디바이스 path prefix 불일치 (bluetooth- vs ble:)
-
-**증상:** BLE 스캔 버튼 클릭 시 아무 반응이 없음. BLE 디바이스가 포트 선택기에 나타나지 않음.
-
-**원인:** `cordova-plugin-rfc-nordic-ble`의 `getDevices()`가 반환하는 디바이스의 `path`는 `"bluetooth-XX:XX:XX:XX:XX"` 형식이다. 그러나 `serial.js`의 `serial.connect()`는 `path.startsWith('ble:')`로 BLE 연결을 판별한다. `bluetooth-` prefix는 이 체크를 통과하지 못해 시리얼 연결 경로로 잘못 라우팅된다.
-
-**해결:** `serial.js`의 `scanBLEDevices()`와 `getDevices()`에서 디바이스 path 생성 시 `NordicBle`의 `path`를 그대로 사용하지 말고 항상 `'ble:' + d.address`로 변환한다:
-```javascript
-// ❌ 잘못된 방식 (NordicBle의 path는 "bluetooth-XX:XX")
-path: d.path || ('ble:' + d.address)
-
-// ✅ 올바른 방식
-path: 'ble:' + d.address
-```
-
-### 10. BLE 디바이스 속성명 변경 (id→address, name→displayName)
-
-**증상:** BLE 스캔 결과가 포트 선택기에 표시되지 않거나 `undefined`로 표시됨.
-
-**원인:** 구 `cordova-plugin-ble-central`은 `{ id, name }` 속성을 반환했지만, 신규 `cordova-plugin-rfc-nordic-ble`은 `{ address, displayName }` 속성을 반환한다. `serial.js`에서 `device.id`, `device.name`을 그대로 사용하면 `undefined`가 된다.
-
-**해결:** `serial.js`의 `scanBLEDevices()`와 `getDevices()`에서 디바이스 속성 참조를 모두 새 형식으로 변경:
-```javascript
-// ❌ 구 형식
-path: 'ble:' + device.id,
-displayName: (device.name || 'Unknown') + ' [BLE]',
-
-// ✅ 신 형식
-path: 'ble:' + d.address,
-displayName: (d.displayName || d.name || 'Unknown') + ' [BLE]',
-```
-
-## BLE 빌드 참고사항
-
-BLE GATT 기능이 포함된 APK를 빌드할 때의 특이사항:
-
-- `cordova/package_template.json`에 `cordova-plugin-rfc-nordic-ble` (로컬 `file:plugins/cordova-plugin-rfc-nordic-ble` 참조) 추가 필수
-- Nordic BLE 라이브러리(`no.nordicsemi.android:ble:2.11.0`, `no.nordicsemi.android.support.v18:scanner:1.6.0`)는 `plugin.xml`의 `<framework>` 항목으로 자동 추가됨
-- BLE 권한(`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`, legacy `BLUETOOTH/ACCESS_COARSE_LOCATION` 등) 및 `<uses-feature bluetooth_le>`는 플러그인 `plugin.xml`이 자동 처리 → `config_template.xml`에 중복 선언 금지
-- `plugin.xml`에 `<preference name="android-enableAndroidX">` 등의 preference를 선언하지 않는다. cordova-android >= 10에서 기본 활성화되며, 직접 선언 시 Cordova variable merge 오류 발생 (Issue 7 참조)
-- 이전 `cordova-plugin-ble-central` 은 더 이상 사용하지 않음 (GATT 큐 미지원으로 인한 MTU 247 협상 실패가 근본 원인 — `blegatt.md` 참조)
-- `app/android/` 디렉토리의 lockfile도 함께 업데이트 필요
-
-### BLE 플러그인 마이그레이션 시 주의사항
-
-1. **디바이스 path 형식**: `cordova-plugin-rfc-nordic-ble`의 `getDevices()`는 `path: "bluetooth-XX:XX:XX:XX:XX"` 형식을 반환한다. `serial.js`의 `serial.connect()`는 `path.startsWith('ble:')`로 BLE 연결을 판별하므로, `scanBLEDevices()`와 `getDevices()`에서 반드시 `path: 'ble:' + d.address`로 변환해야 한다. (Issue 9 참조)
-
-2. **디바이스 속성명 변경**: 구 `cordova-plugin-ble-central`은 `{ id, name }`을 반환했지만, 새 플러그인은 `{ path, address, displayName }`을 반환한다. `serial.js` 내에서 `device.id` → `device.address`, `device.name` → `device.displayName`으로 모두 변경해야 한다. (Issue 10 참조)
-
-3. **MTU/Notify 자동화**: `requestConnectionPriority(HIGH)` + `requestMtu(247)` + `enableNotifications()`가 `NordicBlePlugin.java`의 `BleBridgeManager.initialize()`에서 Nordic 큐를 통해 순차 처리된다. JS 쪽 `bleRequestMtu()`, `bleStartNotification()`, `autoDetectProfile()`은 더 이상 호출할 필요가 없다.
-
-4. **AndroidX/Jetifier**: `plugin.xml`에 `<preference>`로 선언하지 않는다. cordova-android 10+에서 이미 기본 활성화되어 있으며, 명시적 선언 시 `cordova_deps` 단계에서 `Variable(s) missing: ANDROID-ENABLEANDROIDX` 오류가 발생한다.
-
-## 릴리즈 서명 설정
-
-`app/android/build.json`:
-```json
-{
-  "android": {
-    "release": {
-      "keystore": "release.jks",
-      "storePassword": "rotorflight",
-      "alias": "rotorflight",
-      "password" : "rotorflight",
-      "packageType": "apk"
-    }
-  }
-}
-```
-
-릴리즈 빌드는 keystore가 없으면 실패하므로, 개발 중에는 디버그 빌드(`make android`)를 권장.
-
-## 버전 관리
-
-APK 버전은 `package.json`의 `version` 필드로 관리된다. 빌드 전 올바른 버전을 설정해야 한다.
-
-```bash
-# 버전 설정
-make version SEMVER=2.2.0
-
-# 또는 직접 package.json 수정
-sed -i 's|"version": *".*"|"version": "2.2.0"|' package.json
-```
-
-### version 0.0.0 문제
-
-`version`이 `0.0.0`이면 앱 실행 시 다음과 같은 개발 버전 경고가 표시된다:
-```
-You are using a development version of the Rotorflight Configurator.
-```
-
-이는 `src/js/main.js:418`에서 `CONFIGURATOR.version.startsWith("0.0.0")` 검사를 수행하기 때문.
-실제 릴리즈/테스트 시에는 반드시 적절한 버전(`2.2.0`, `2.3.0` 등)을 설정 후 빌드할 것.
-
-## 참고 파일
-
-- `Makefile` - 빌드 타겟 정의
-- `gulpfile.mjs` - 빌드 파이프라인 정의
-- `cordova/config_template.xml` - Cordova 앱 설정 템플릿
-- `cordova/package_template.json` - Cordova 패키지 의존성
-- `cordova/build.json` - 안드로이드 빌드/서명 설정

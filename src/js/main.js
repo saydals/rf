@@ -15,9 +15,9 @@ import { ReleaseChecker } from "@/js/release_checker.js";
 import { handleConnectClick, initializeSerialBackend } from "@/js/serial_backend.js";
 import { TABS } from "@/js/tabs/tabs.js";
 
-if (__BACKEND__ === "nwjs") {
+if (false) {
+    // NW.js 전용 (더 이상 사용하지 않음)
     if (import.meta.env.DEV) {
-        // allow smaller window for testing mobile layout
         nw.Window.get().setMinimumSize(320, 550);
     }
 

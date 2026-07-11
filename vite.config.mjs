@@ -71,7 +71,7 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
-    __BACKEND__: JSON.stringify("nwjs"),
+    __BACKEND__: JSON.stringify("cordova"),
     __COMMIT_HASH__: JSON.stringify(commitHash),
   },
   server: {

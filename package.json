@@ -3,48 +3,17 @@
   "productName": "Rotorflight Configurator",
   "description": "Crossplatform configuration tool for Rotorflight flight control system.",
   "version": "2.3.5",
-  "main": "http://localhost:5077/",
-  "node-remote": "http://localhost:*",
   "scripts": {
     "lint": "eslint --cache src \"./*.mjs\"",
-    "lint:fix": "eslint --fix src \"./*.mjs\"",
-    "start": "concurrently --kill-others 'pnpm vite' 'pnpm gulp dev_client'",
-    "prepare": "husky || true"
-  },
-  "window": {
-    "icon": "public/images/rf_icon.png",
-    "id": "main-window",
-    "min_width": 1024,
-    "min_height": 550,
-    "title": "Rotorflight Configurator"
-  },
-  "repository": {
-    "type": "git",
-    "url": "github.com/rotorflight/rotorflight-configurator"
-  },
-  "webview": {
-    "partitions": [
-      {
-        "name": "map",
-        "accessible_resources": [
-          "/src/tabs/map.html",
-          "/assets/src/tabs/map.html.js",
-          "/assets/modulepreload-polyfill.js",
-          "/libraries/openlayers/ol.css",
-          "/libraries/openlayers/ol.js",
-          "/images/icons/cf_icon_position.png",
-          "/images/icons/cf_icon_position_nofix.png"
-        ]
-      }
-    ]
+    "lint:fix": "eslint --fix src \"./*.mjs\""
   },
   "author": "The Rotorflight open source project.",
   "license": "GPL-3.0",
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=24.0.0",
-      "onFail": "error"
+      "version": ">=22.0.0",
+      "onFail": "warn"
     },
     "packageManager": {
       "name": "pnpm",
@@ -66,15 +35,12 @@
     "@eslint/js": "^10.0.1",
     "@floating-ui/dom": "^1.7.6",
     "@fortawesome/fontawesome-free": "^5.13.0",
-    "@quanle94/innosetup": "^6.0.2",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/jquery": "^4.0.1",
     "@types/node": "^26.0.0",
     "@types/semver": "^7.7.1",
     "archiver": "^8.0.0",
     "command-exists": "^1.2.9",
-    "concurrently": "^10.0.3",
     "cordova-lib": "^12.0.2",
     "d3": "^7.9.0",
     "dompurify": "^3.4.11",
@@ -89,19 +55,13 @@
     "gulp-rename": "^2.0.0",
     "gulp-replace": "^1.1.3",
     "gulplog": "^2.2.0",
-    "husky": "^9.1.7",
     "i18next": "^26.3.1",
     "i18next-http-backend": "^4.0.0",
-    "lint-staged": "^17.0.8",
     "marked": "^18.0.5",
     "microdiff": "^1.5.0",
     "minimist": "^1.2.8",
     "multiple-select": "^1.7.0",
     "nouislider": "^15.8.1",
-    "nw-builder": "4.9.0",
-    "prettier": "^3.8.4",
-    "prettier-plugin-svelte": "^4.1.1",
-    "rpm-builder": "^1.2.1",
     "sass-embedded": "^1.100.0",
     "semver": "^7.8.5",
     "sortablejs": "^1.15.7",
@@ -113,8 +73,5 @@
     "vinyl-source-stream": "^2.0.0",
     "vite": "^8.1.0",
     "wnumb": "^1.2.0"
-  },
-  "optionalDependencies": {
-    "appdmg": "^0.6.6"
   }
 }
