@@ -358,26 +358,33 @@ export const MSP = {
         }
 
         if (!requestExists) {
-            obj.timer = setInterval(function () {
-                console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab}`);
+            obj.retryCount = 0;
+            obj.timeouts = [3000, 6000]; // 3s, 6s retry (bluetooth friendly, no infinite loop)
+            const retry = function () {
+                console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab} retry: ${obj.retryCount + 1}/${obj.timeouts.length}`);
 
-                // cancel request if MSP communication is not possible
                 if (!serial.connected || CONFIGURATOR.cliEngineActive) {
                     console.log('Cancelling MSP request');
-
-                    const i = MSP.callbacks.findIndex(obj);
-                    MSP.callbacks.splice(i, 1);
-                    clearInterval(obj.timer);
-
-                    if (doCallbackOnError) {
-                      obj.callback?.();
-                    }
-
+                    const i = MSP.callbacks.indexOf(obj);
+                    if (i > -1) MSP.callbacks.splice(i, 1);
+                    clearTimeout(obj.timer);
+                    if (doCallbackOnError) obj.callback?.();
                     return;
                 }
 
                 serial.send(bufferOut, false);
-            }, 2500); // we should be able to define timeout in the future
+                
+                obj.retryCount++;
+                if (obj.retryCount < obj.timeouts.length) {
+                    obj.timer = setTimeout(retry, obj.timeouts[obj.retryCount]);
+                } else {
+                    console.warn(`MSP request failed after retries: ${code} tab: ${GUI.active_tab}`);
+                    const i = MSP.callbacks.indexOf(obj);
+                    if (i > -1) MSP.callbacks.splice(i, 1);
+                    if (doCallbackOnError) obj.callback?.();
+                }
+            };
+            obj.timer = setTimeout(retry, obj.timeouts[0]);
         }
 
         MSP.callbacks.push(obj);
