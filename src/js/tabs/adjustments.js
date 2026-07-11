@@ -122,7 +122,11 @@ function getFunctions() {
 tab.initialize = function (callback) {
     const self = this;
 
-    load_data(load_html);
+    load_html();  // HTML immediately
+    // MSP data loads in background
+    load_data(function () {
+        data_to_form();
+    });
 
     function load_html() {
         $('#content').load("/src/tabs/adjustments.html", process_html);
