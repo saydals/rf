@@ -184,6 +184,8 @@ tab.activateCli = function () {
     return new Promise(resolve => {
         CONFIGURATOR.cliEngineActive = true;
         CONFIGURATOR.cliTab = 'cli';
+        // Enter fullscreen mode: hide all non-CLI UI
+        document.body.classList.add('cli-fullscreen');
         this.cliEngine.setUi(this.GUI.window, this.GUI.windowWrapper, this.GUI.textarea);
         this.cliEngine.initializeAutoComplete();
         this.cliEngine.enterCliMode();
@@ -227,6 +229,9 @@ tab.read = function (readInfo) {
 };
 
 tab.cleanup = function (callback) {
+    // Exit fullscreen mode
+    document.body.classList.remove('cli-fullscreen');
+
     if (tab.GUI.snippetPreviewWindow) {
         tab.GUI.snippetPreviewWindow.destroy();
         tab.GUI.snippetPreviewWindow = null;
