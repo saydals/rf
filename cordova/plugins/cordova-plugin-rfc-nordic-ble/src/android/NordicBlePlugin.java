@@ -669,6 +669,8 @@ public class NordicBlePlugin extends CordovaPlugin {
         }
 
         private class ManagerGattCallback extends BleManagerGattCallback {
+            // 기기별 GATT 캐시를 저장 (disconnect 시 clearCache에 사용)
+            private BluetoothGatt currentGatt = null;
             private BluetoothGattService chooseSpeedyBeeFallback(BluetoothGatt gatt) {
                 if (gatt.getService(UUID_SPEEDYBEE_FF00) != null) return gatt.getService(UUID_SPEEDYBEE_FF00);
                 if (gatt.getService(UUID_SPEEDYBEE_V2) != null) return gatt.getService(UUID_SPEEDYBEE_V2);
@@ -677,6 +679,7 @@ public class NordicBlePlugin extends CordovaPlugin {
 
             @Override
             protected boolean isRequiredServiceSupported(@NonNull BluetoothGatt gatt) {
+                currentGatt = gatt; // save for cache clearing on disconnect
                 Log.d(TAG, "Validating GATT services for " + gatt.getDevice().getAddress());
                 BluetoothGattService service = gatt.getService(serviceUuid);
                 if (service == null) {
@@ -744,6 +747,18 @@ public class NordicBlePlugin extends CordovaPlugin {
             protected void onServicesInvalidated() {
                 writeCharacteristic = null;
                 notifyCharacteristic = null;
+                // Android GATT 캐시 오염 문제 해결:
+                // disconnect 시 캐시를 삭제하여 다음 연결이 항상 새로 서비스 검색하도록 함
+                if (currentGatt != null) {
+                    try {
+                        java.lang.reflect.Method refresh = BluetoothGatt.class.getMethod("refresh");
+                        refresh.invoke(currentGatt);
+                        Log.d(TAG, "GATT cache cleared");
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to clear GATT cache", e);
+                    }
+                    currentGatt = null;
+                }
             }
         }
 
