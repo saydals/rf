@@ -65,6 +65,20 @@ tab.initialize = function (callback) {
         self.GUI.window = $('.tab-cli .window');
         self.GUI.windowWrapper = $('.tab-cli .window .wrapper');
         self.GUI.textarea = $('.tab-cli textarea[name="commands"]');
+        self.GUI.enterBtn = $('.tab-cli .cli-enter-btn');
+
+        // Keyboard toggle: click to open, click again to close
+        let keyboardVisible = false;
+        self.GUI.textarea.on('click', function (e) {
+            if (keyboardVisible) {
+                // Close keyboard by blurring the textarea
+                self.GUI.textarea.blur();
+                keyboardVisible = false;
+            } else {
+                self.GUI.textarea.focus();
+                keyboardVisible = true;
+            }
+        });
 
         $('.tab-cli .save').on('click', async function () {
             const prefix = 'cli';

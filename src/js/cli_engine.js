@@ -28,6 +28,14 @@ export default class CliEngine {
 
   #inBatchMode = false; // track whether batch mode has been detected
 
+  // Output buffering for performance (prevents DOM thrashing on large dumps)
+  #outputBuffer = "";       // buffered HTML text
+  #outputFlushRaf = null;   // pending requestAnimationFrame ID
+  #scrollPinned = true;     // auto-scroll enabled
+  #scrollRaf = null;        // deferred scroll requestAnimationFrame ID
+  #MAX_OUTPUT_NODES = 4000; // max child nodes before pruning
+  #PRUNE_TO_NODES = 2500;   // target node count after pruning
+
   // GUI elements for presenting an interactable CLI
   #GUI = {
     window: null, // the CLI window
@@ -66,7 +74,14 @@ export default class CliEngine {
   }
   clearOutputHistory() {
     this.#outputHistory = "";
-    this.#GUI.windowWrapper.empty();
+    if (this.#GUI.windowWrapper) {
+      this.#GUI.windowWrapper[0].innerHTML = "";
+    }
+    this.#outputBuffer = "";
+    if (this.#outputFlushRaf) {
+      cancelAnimationFrame(this.#outputFlushRaf);
+      this.#outputFlushRaf = null;
+    }
   }
 
   get errorsCount() {
@@ -204,32 +219,44 @@ export default class CliEngine {
     await this.executeCommandsArray(commandArray);
   }
 
-  // executeCommandsArray
+  // executeCommandsArray sends commands in batches (3 per tick) to prevent BLE buffer overflow
   async executeCommandsArray(commandsArray) {
     this.#reportSendCommandsProgress(0);
-    for (let i = 0, delay = 0; i < commandsArray.length; i++) {
-      let line = commandsArray[i].trim();
-      if (line.length === 0) continue;
+    const COMMANDS_PER_TICK = 3;
+    let i = 0;
 
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+    const sendBatch = async () => {
+      for (let n = 0; n < COMMANDS_PER_TICK && i < commandsArray.length; n++, i++) {
+        let line = commandsArray[i].trim();
+        if (line.length === 0) continue;
 
-      if (this.#cliBufferContainsPartialCommand) {
-        line = this.#lineWithBuffer(line);
+        if (this.#cliBufferContainsPartialCommand) {
+          line = this.#lineWithBuffer(line);
+        }
+
+        await new Promise((resolve) => this.sendLine(line, resolve));
+
+        this.#reportSendCommandsProgress((100.0 * i) / commandsArray.length);
+
+        if (line.toLowerCase().startsWith("profile")) {
+          await new Promise((resolve) => setTimeout(resolve, this.#profileSwitchDelayMs));
+        } else if (line.toLowerCase().startsWith("rateprofile")) {
+          await new Promise((resolve) => setTimeout(resolve, this.#rateProfileSwitchDelayMs));
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, this.#lineDelayMs));
+        }
       }
 
-      await new Promise((resolve) => this.sendLine(line, resolve));
-
-      this.#reportSendCommandsProgress((100.0 * i) / commandsArray.length);
-
-      if (line.toLowerCase().startsWith("profile")) {
-        delay = this.#profileSwitchDelayMs;
-      } else if (line.toLowerCase().startsWith("rateprofile")) {
-        delay = this.#rateProfileSwitchDelayMs;
+      if (i < commandsArray.length) {
+        // Schedule next batch asynchronously to let UI breathe
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await sendBatch();
       } else {
-        delay = this.#lineDelayMs;
+        this.#reportSendCommandsProgress(100);
       }
-    }
-    this.#reportSendCommandsProgress(100);
+    };
+
+    await sendBatch();
   }
 
   // removePromptHash removes the # from the prompt text, and is used to handle the output of the FC native autocomplete.
@@ -269,19 +296,70 @@ export default class CliEngine {
 
   // writeToOutput is a function used to write text to the window wrapper -- while primarily used by the CliEngine, it is also used by CliAutoComplete.
   writeToOutput(text) {
-    this.#GUI.windowWrapper.append(text);
-    this.#GUI.window.scrollTop(this.#GUI.window.prop("scrollHeight"));
+    if (!this.#GUI.windowWrapper || !this.#GUI.windowWrapper[0]) {
+      return;
+    }
+    this.#outputBuffer += text;
+    // Flush immediately on large chunks, otherwise defer via RAF + setTimeout fallback
+    if (this.#outputBuffer.length > 10000) {
+      if (this.#outputFlushRaf) {
+        cancelAnimationFrame(this.#outputFlushRaf);
+        this.#outputFlushRaf = null;
+      }
+      this.#flushOutput();
+    } else if (!this.#outputFlushRaf) {
+      // Primary: requestAnimationFrame for smooth rendering
+      this.#outputFlushRaf = requestAnimationFrame(() => this.#flushOutput());
+      // Fallback: setTimeout in case RAF doesn't fire (Cordova WebView)
+      setTimeout(() => {
+        if (this.#outputFlushRaf) {
+          cancelAnimationFrame(this.#outputFlushRaf);
+          this.#outputFlushRaf = null;
+          this.#flushOutput();
+        }
+      }, 50);
+    }
+  }
+
+  #flushOutput() {
+    this.#outputFlushRaf = null;
+    if (!this.#outputBuffer || !this.#GUI.windowWrapper || !this.#GUI.windowWrapper[0]) {
+      return;
+    }
+    const wrapper = this.#GUI.windowWrapper[0];
+    wrapper.insertAdjacentHTML("beforeend", this.#outputBuffer);
+    this.#outputBuffer = "";
+
+    // Prune oldest nodes to keep DOM bounded and rendering fast
+    if (wrapper.childNodes.length > this.#MAX_OUTPUT_NODES) {
+      const toRemove = wrapper.childNodes.length - this.#PRUNE_TO_NODES;
+      const range = document.createRange();
+      range.setStartBefore(wrapper.firstChild);
+      range.setEndBefore(wrapper.childNodes[toRemove]);
+      range.deleteContents();
+    }
+
+    // Deferred scroll to avoid forced reflow
+    if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0] && !this.#scrollRaf) {
+      this.#scrollRaf = requestAnimationFrame(() => {
+        this.#scrollRaf = null;
+        if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0]) {
+          this.#GUI.window[0].scrollTop = this.#GUI.window[0].scrollHeight;
+        }
+      });
+    }
   }
 
   #writeLineToOutput(text) {
     if (this.#cliAutoComplete && this.#cliAutoComplete.isBuilding()) {
       this.#cliAutoComplete.builderParseLine(text);
     } else {
+      const escaped = GUI.escapeHtml(text);
       if (text.startsWith("###ERROR")) {
-        this.writeToOutput(`<span class="error_message">${text}</span><br>`);
+        this.writeToOutput(`<span class="error_message">${escaped}</span><br>`);
         this.#cliErrorsCount++;
       } else {
-        this.writeToOutput(`${text}<br>`);
+        this.writeToOutput(`${escaped}<br>`);
       }
     }
     this.#responseCallback?.();
@@ -442,10 +520,10 @@ export default class CliEngine {
           }
           break;
         case 60:
-          this.#cliBuffer += "&lt";
+          this.#cliBuffer += "<";
           break;
         case 62:
-          this.#cliBuffer += "&gt";
+          this.#cliBuffer += ">";
           break;
         case CHAR_CODE_BACKSPACE:
           this.#cliBuffer = this.#cliBuffer.slice(0, -1);
@@ -455,6 +533,10 @@ export default class CliEngine {
           this.#cliBuffer += currentChar;
       }
       this.#outputHistory += currentChar;
+      // Limit outputHistory size to prevent freeze on large dumps
+      if (this.#outputHistory.length > 50000) {
+        this.#outputHistory = this.#outputHistory.slice(-25000);
+      }
     }
   }
 }
