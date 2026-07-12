@@ -196,6 +196,18 @@ tab.activateCli = function () {
                 }, 500);
             }
         }, 500);
+
+        // Safety timeout: prevent infinite polling if welcome message is lost (e.g. BLE)
+        setTimeout(() => {
+            clearInterval(waitForValidCliEngine);
+            if (!CONFIGURATOR.cliEngineValid) {
+                console.warn('[CLI] Enter CLI mode timed out - forcing ready');
+                CONFIGURATOR.cliEngineValid = true;
+                GUI.timeout_add('enter_cli', () => {
+                    resolve();
+                }, 500);
+            }
+        }, 10000);
     });
 };
 

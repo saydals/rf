@@ -33,8 +33,8 @@ export default class CliEngine {
   #outputFlushRaf = null;   // pending requestAnimationFrame ID
   #scrollPinned = true;     // auto-scroll enabled
   #scrollRaf = null;        // deferred scroll requestAnimationFrame ID
-  #MAX_OUTPUT_NODES = 4000; // max child nodes before pruning
-  #PRUNE_TO_NODES = 2500;   // target node count after pruning
+  #MAX_OUTPUT_NODES = 20000; // max child nodes before pruning
+  #PRUNE_TO_NODES = 15000;   // target node count after pruning
 
   // GUI elements for presenting an interactable CLI
   #GUI = {
@@ -322,31 +322,40 @@ export default class CliEngine {
   }
 
   #flushOutput() {
-    this.#outputFlushRaf = null;
-    if (!this.#outputBuffer || !this.#GUI.windowWrapper || !this.#GUI.windowWrapper[0]) {
-      return;
-    }
-    const wrapper = this.#GUI.windowWrapper[0];
-    wrapper.insertAdjacentHTML("beforeend", this.#outputBuffer);
-    this.#outputBuffer = "";
+    try {
+      this.#outputFlushRaf = null;
+      if (!this.#outputBuffer || !this.#GUI.windowWrapper || !this.#GUI.windowWrapper[0]) {
+        return;
+      }
+      const wrapper = this.#GUI.windowWrapper[0];
+      wrapper.insertAdjacentHTML("beforeend", this.#outputBuffer);
+      this.#outputBuffer = "";
 
-    // Prune oldest nodes to keep DOM bounded and rendering fast
-    if (wrapper.childNodes.length > this.#MAX_OUTPUT_NODES) {
-      const toRemove = wrapper.childNodes.length - this.#PRUNE_TO_NODES;
-      const range = document.createRange();
-      range.setStartBefore(wrapper.firstChild);
-      range.setEndBefore(wrapper.childNodes[toRemove]);
-      range.deleteContents();
-    }
+      // Prune oldest nodes to keep DOM bounded and rendering fast
+      if (wrapper.childNodes.length > this.#MAX_OUTPUT_NODES) {
+        const toRemove = wrapper.childNodes.length - this.#PRUNE_TO_NODES;
+        const range = document.createRange();
+        range.setStartBefore(wrapper.firstChild);
+        range.setEndBefore(wrapper.childNodes[toRemove]);
+        range.deleteContents();
+      }
 
-    // Deferred scroll to avoid forced reflow
-    if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0] && !this.#scrollRaf) {
-      this.#scrollRaf = requestAnimationFrame(() => {
-        this.#scrollRaf = null;
-        if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0]) {
-          this.#GUI.window[0].scrollTop = this.#GUI.window[0].scrollHeight;
-        }
-      });
+      // Deferred scroll to avoid forced reflow
+      if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0] && !this.#scrollRaf) {
+        this.#scrollRaf = requestAnimationFrame(() => {
+          this.#scrollRaf = null;
+          if (this.#scrollPinned && this.#GUI.window && this.#GUI.window[0]) {
+            this.#GUI.window[0].scrollTop = this.#GUI.window[0].scrollHeight;
+          }
+        });
+      }
+    } catch (e) {
+      console.error("[CLI] flushOutput error:", e);
+      this.#outputBuffer = "";  // Clear bad data to allow recovery
+    } finally {
+      if (this.#outputFlushRaf === null) {
+        this.#outputFlushRaf = null;  // Ensure it's always null
+      }
     }
   }
 

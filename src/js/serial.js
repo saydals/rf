@@ -283,7 +283,18 @@ export const serial = {
         self._bleReceiveHandler = function (e) {
             const data = e.detail;
             if (data && data.byteLength > 0) {
-                if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+                if (CONFIGURATOR.cliEngineActive) {
+                    // CLI mode: bypass MSP reassembler, send raw data directly to listeners
+                    for (let i = 0; i < self.onReceive.listeners.length; i++) {
+                        self.onReceive.listeners[i]({
+                            data: data,
+                            connectionType: 'ble',
+                        });
+                    }
+                } else {
+                    // MSP mode: use reassembler as normal
+                    if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+                }
             }
         };
         nordicBle.addEventListener('receive', self._bleReceiveHandler);
