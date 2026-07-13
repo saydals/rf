@@ -56,13 +56,7 @@ const tab = {
 tab.initialize = function (callback) {
     const self = this;
 
-    // HTML first, data in background
-    load_html();
-    
-    // Background MSP data load
-    setTimeout(function () {
-        load_data(function () { data_to_form(); console.log("profiles: done"); });
-    }, 100);
+    load_data(load_html);
 
     function load_html() {
         $('#content').load("/src/tabs/profiles.html", process_html);

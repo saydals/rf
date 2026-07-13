@@ -189,11 +189,7 @@ tab.initialize = function (callback) {
 
     let saveCancelled, eraseCancelled;
 
-    load_html();  // HTML immediately
-    // MSP data loads in background
-    load_data(function () {
-        data_to_form();
-    });
+    load_data(load_html);
 
     function load_html() {
         $('#content').load("/src/tabs/blackbox.html", process_html);

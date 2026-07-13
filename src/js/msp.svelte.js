@@ -358,26 +358,34 @@ export const MSP = {
         }
 
         if (!requestExists) {
+            if (!serial.connected || CONFIGURATOR.cliEngineActive) {
+                console.log('Cancelling MSP request');
+
+                if (doCallbackOnError) {
+                  obj.callback?.();
+                }
+
+                return;
+            }
+
+            // 3초 간격 무한 재시도 (응답 올 때까지 계속)
             obj.timer = setInterval(function () {
                 console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab}`);
 
-                // cancel request if MSP communication is not possible
+                // 연결 끊김 또는 CLI 진입 중이면 중단
                 if (!serial.connected || CONFIGURATOR.cliEngineActive) {
                     console.log('Cancelling MSP request');
-
-                    const i = MSP.callbacks.findIndex(obj);
+                    const i = MSP.callbacks.indexOf(obj);
                     if (i > -1) MSP.callbacks.splice(i, 1);
                     clearInterval(obj.timer);
-
                     if (doCallbackOnError) {
-                      obj.callback?.();
+                        obj.callback?.();
                     }
-
                     return;
                 }
 
                 serial.send(bufferOut, false);
-            }, 2000); // 2s retry interval
+            }, 3000);
         }
 
         MSP.callbacks.push(obj);

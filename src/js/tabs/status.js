@@ -86,11 +86,7 @@ tab.getDisarmFlags = function () {
 tab.initialize = function (callback) {
     const self = this;
 
-    load_html();  // HTML immediately
-    // MSP data loads in background
-    load_data(function () {
-        data_to_form();
-    });
+    load_data(load_html);
 
     function load_html() {
         $('#content').load("/src/tabs/status.html", process_html);

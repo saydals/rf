@@ -307,21 +307,6 @@ async function onOpen(openInfo) {
 
         resetMspHelper();
         MSP.listen(mspHelper.process_data.bind(mspHelper));
-        // Safety: if FC is stuck in CLI mode, send exit\r\n to escape before requesting MSP
-        // This prevents infinite hang when previous session left FC in CLI mode
-        const escapeBuffer = new ArrayBuffer(5);
-        const escapeView = new Uint8Array(escapeBuffer);
-        escapeView[0] = 0x65; // e
-        escapeView[1] = 0x78; // x
-        escapeView[2] = 0x69; // i
-        escapeView[3] = 0x74; // t
-        escapeView[4] = 0x0D; // \r
-        serial.send(escapeBuffer, false);
-        // Also send \n for compatibility
-        const lfBuffer = new ArrayBuffer(1);
-        const lfView = new Uint8Array(lfBuffer);
-        lfView[0] = 0x0A; // \n
-        serial.send(lfBuffer, false);
 
         console.log(`Requesting configuration data`);
 

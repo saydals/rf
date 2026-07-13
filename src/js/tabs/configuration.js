@@ -294,11 +294,7 @@ tab.initialize = function (callback) {
 
     GUI.configuration_loaded = true;
 
-    load_html();  // HTML immediately
-    // MSP data loads in background
-    load_data().then(function () {
-        data_to_form();
-    });
+    load_data().then(load_html);
 
     function load_html() {
         $('#content').load("/src/tabs/configuration.html", process_html);

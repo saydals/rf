@@ -51,11 +51,7 @@ tab.initialize = function (callback) {
         $('.reboot_btn').toggle(!!self.needReboot);
     }
 
-    load_html();  // HTML immediately
-    // MSP data loads in background
-    load_data(function () {
-        data_to_form();
-    });
+    load_data(load_html);
 
     function load_html() {
         $('#content').load("/src/tabs/mixer.html", process_html);
