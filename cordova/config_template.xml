@@ -63,6 +63,11 @@
              - uses-feature android.hardware.bluetooth_le
              여기서는 중복 선언하지 않는다. -->
 
+        <!-- SPP (Bluetooth Classic) 권한: BLUETOOTH_CONNECT 만 추가 (나머지는 BLE 플러그인에서 이미 선언) -->
+        <config-file parent="/manifest" target="AndroidManifest.xml">
+            <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+        </config-file>
+
         <config-file parent="/manifest/application/activity" target="AndroidManifest.xml">
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>

@@ -45,6 +45,11 @@ PortHandler.check = function () {
         self.check_ble_devices();
     }
 
+    // Cordova 환경에서 SPP 디바이스 목록 갱신
+    if (GUI.isCordova()) {
+        self.check_spp_devices();
+    }
+
     GUI.updateManualPortVisibility();
 
     setTimeout(function () {
@@ -57,9 +62,10 @@ function portRecognized(portName, pathSelect) {
             const isWindows = (GUI.operating_system === 'Windows');
             const isTty = pathSelect.includes('tty');
             const isBLE = pathSelect.startsWith("ble:");
+            const isSPP = pathSelect.startsWith("spp:");
             const deviceRecognized = portName.includes('STM') || portName.includes('CP210');
             const legacyDeviceRecognized = portName.includes('usb');
-            if (isWindows && deviceRecognized || isTty && (deviceRecognized || legacyDeviceRecognized) || isBLE) {
+            if (isWindows && deviceRecognized || isTty && (deviceRecognized || legacyDeviceRecognized) || isBLE || isSPP) {
                 return true;
             }
     }
@@ -102,6 +108,19 @@ PortHandler.check_ble_devices = function () {
     // BLE 디바이스 스캔은 BLE Scan 버튼을 통해 수동으로만 수행
     // 여기서는 cachedBLEDevices가 갱신되었는지만 확인
     // (getDevices()가 cachedBLEDevices를 자동으로 반환)
+};
+
+PortHandler.check_spp_devices = function () {
+    const self = this;
+
+    // SPP 장치 목록은 페어링된 장치를 자동으로 조회
+    // listSPPDevices()가 cachedSPPDevices를 갱신 (getDevices()가 이를 반환)
+    serial.listSPPDevices(function (mappedDevices) {
+        if (mappedDevices.length > 0) {
+            // 장치가 있으면 port picker 업데이트 트리거
+            self.check_serial_devices();
+        }
+    });
 };
 
 PortHandler.check_usb_devices = function (callback) {

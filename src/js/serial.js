@@ -14,6 +14,13 @@ import {
     BLE_DEFAULT_MTU,
     BLE_REQUESTED_MTU,
 } from "@/js/ble_central.js";
+import {
+    sppConnect,
+    sppDisconnect,
+    sppWrite,
+    sppList,
+    sppIsEnabled,
+} from "@/js/spp_central.js";
 
 // NordicBle 인스턴스 접근 (cordova-plugin-rfc-nordic-ble)
 function getNordicBle() {
@@ -43,7 +50,7 @@ export const serial = {
     bytesReceived:  0,
     bytesSent:      0,
     failed:         0,
-    connectionType: 'serial', // 'serial' or 'tcp' or 'virtual' or 'ble'
+    connectionType: 'serial', // 'serial' or 'tcp' or 'virtual' or 'ble' or 'spp'
     connectionIP:   '127.0.0.1',
     connectionPort: 5761,
 
@@ -54,6 +61,11 @@ export const serial = {
     bleRxCharUUID:   null,     // RX 특성 UUID
     bleMtu:          BLE_DEFAULT_MTU,  // 협상된 MTU
     bleRxBuffer:     null,     // MSP 프레임 재조립기
+
+    // SPP 전용 상태 (신규)
+    sppDevice:       null,     // 연결된 SPP 디바이스 객체
+    sppDataHandler:  null,     // SPP 데이터 핸들러
+    cachedSPPDevices: [],      // 캐시된 SPP 장치 목록
 
     transmitting:   false,
     outputBuffer:   [],
@@ -68,6 +80,9 @@ export const serial = {
         } else if (path.startsWith('ble:')) {
             const deviceId = path.substring(4);
             self.connectBLE(deviceId, options, callback);
+        } else if (path.startsWith('spp:')) {
+            const deviceAddress = path.substring(4);
+            self.connectSPP(deviceAddress, options, callback);
         } else {
             self.connectSerial(path, options, callback);
         }
@@ -375,6 +390,67 @@ export const serial = {
         self.bleMtu = BLE_DEFAULT_MTU;
     },
 
+    connectSPP: function (deviceAddress, options, callback) {
+        const self = this;
+        self.connectionType = 'spp';
+
+        self._sppDataHandler = function (data) {
+            self.bytesReceived += data.byteLength;
+            for (let i = 0; i < self.onReceive.listeners.length; i++) {
+                self.onReceive.listeners[i]({
+                    data: data,
+                    connectionType: 'spp',
+                });
+            }
+        };
+
+        console.log(`SPP: connecting to ${deviceAddress}`);
+
+        const onConnectSPP = function (result) {
+            self.connected = true;
+            self.connectionId = deviceAddress;
+            self.bytesReceived = 0;
+            self.bytesSent = 0;
+            self.failed = 0;
+
+            // onData 콜백 연결
+            onConnectSPP._onData = self._sppDataHandler;
+
+            console.log('SPP: connected');
+            GUI.log('SPP connected (115200)');
+
+            // exit 명령 전송 (BLE와 동일)
+            const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]);
+            sppWrite(exitCmd.buffer,
+                function () {
+                    console.log('SPP: exit sent, connection ready');
+                    if (callback) callback({ connectionId: deviceAddress });
+                },
+                function () {
+                    if (callback) callback({ connectionId: deviceAddress });
+                }
+            );
+        };
+
+        sppConnect(
+            deviceAddress,
+            onConnectSPP,
+            function (error) {
+                // onDisconnect
+                console.log(`SPP: device ${deviceAddress} disconnected`, error);
+                if (self.connected) {
+                    self.errorHandler('disconnected', 'receive');
+                }
+            },
+            function (error) {
+                // onError
+                console.error(`SPP: connect error (${deviceAddress}):`, error);
+                GUI.log(`SPP connect failed: ${error}`);
+                if (callback) callback(false);
+            }
+        );
+    },
+
     disconnect: function (callback) {
         const self = this;
         self.connected = false;
@@ -398,6 +474,19 @@ export const serial = {
                     if (callback) callback(true);
                 }, function (error) {
                     console.error(`${self.connectionType}: error closing connection: ${error}`);
+                    self.connectionId = false;
+                    if (callback) callback(false);
+                });
+                return;
+            } else if (self.connectionType === 'spp') {
+                // SPP 연결 해제
+                self._sppDataHandler = null;
+                sppDisconnect(function () {
+                    console.log(`SPP: closed connection, Sent: ${self.bytesSent} bytes, Received: ${self.bytesReceived} bytes`);
+                    self.connectionId = false;
+                    if (callback) callback(true);
+                }, function (error) {
+                    console.error(`SPP: error closing connection: ${error}`);
                     self.connectionId = false;
                     if (callback) callback(false);
                 });
@@ -443,14 +532,38 @@ export const serial = {
             if (this.cachedBLEDevices && this.cachedBLEDevices.length > 0) {
                 const allDevices = [];
                 // 시리얼 장치는 사용 불가 (Cordova에서는 chrome.serial 없음)
-                // BLE 장치만 반환
+                // BLE 장치 반환
                 this.cachedBLEDevices.forEach(function (device) {
                     allDevices.push({
                         path: 'ble:' + device.address,
                         displayName: (device.displayName || device.name || device.address || 'Unknown') + (device.serviceUuid ? ' [BLE]' : ' [BLE?]'),
                     });
                 });
+                // SPP 장치도 포함
+                if (this.cachedSPPDevices && this.cachedSPPDevices.length > 0) {
+                    this.cachedSPPDevices.forEach(function (device) {
+                        allDevices.push({
+                            path: 'spp:' + device.address,
+                            displayName: device.name + ' [SPP]',
+                        });
+                    });
+                }
                 callback(allDevices);
+                return;
+            }
+        }
+
+        // Cordova 환경이지만 BLE 결과가 없는 경우에도 SPP 장치는 포함
+        if (GUI.isCordova()) {
+            if (this.cachedSPPDevices && this.cachedSPPDevices.length > 0) {
+                const sppDevices = [];
+                this.cachedSPPDevices.forEach(function (device) {
+                    sppDevices.push({
+                        path: 'spp:' + device.address,
+                        displayName: device.name + ' [SPP]',
+                    });
+                });
+                callback(sppDevices);
                 return;
             }
         }
@@ -504,6 +617,37 @@ export const serial = {
         }, function (error) {
             console.warn('BLE is not enabled:', error);
             if (callback) callback([]);
+        });
+    },
+
+    /**
+     * SPP 장치 목록 조회 (port_handler에서 호출)
+     * 페어링된 Bluetooth Classic 장치를 bluetoothSerial.list()로 조회
+     */
+    listSPPDevices: function (callback) {
+        const self = this;
+        sppIsEnabled(function () {
+            sppList(
+                function (devices) {
+                    self.cachedSPPDevices = devices;
+                    const mapped = devices.map(function (d) {
+                        return {
+                            path: 'spp:' + d.address,
+                            displayName: d.name + ' [SPP]',
+                            address: d.address,
+                            name: d.name,
+                        };
+                    });
+                    if (callback) callback(mapped);
+                },
+                function (error) {
+                    console.error('SPP list failed:', error);
+                    if (callback) callback([], error || 'list failed');
+                }
+            );
+        }, function (error) {
+            console.warn('SPP is not enabled:', error);
+            if (callback) callback([], error || 'bluetooth not enabled');
         });
     },
     getInfo: function (callback) {
@@ -572,6 +716,34 @@ export const serial = {
                 }
 
                 sendNextFragment();
+            } else if (self.connectionType === 'spp') {
+                // SPP 전송: MTU 제한 없음, 그대로 전송
+                sppWrite(_data,
+                    function () {
+                        self.bytesSent += _data.byteLength;
+                        if (_callback) {
+                            _callback({ bytesSent: _data.byteLength });
+                        }
+                        self.outputBuffer.shift();
+                        if (self.outputBuffer.length) {
+                            _send();
+                        } else {
+                            self.transmitting = false;
+                        }
+                    },
+                    function (error) {
+                        console.error('SPP send error:', error);
+                        if (_callback) {
+                            _callback({ bytesSent: 0, error: error });
+                        }
+                        self.outputBuffer.shift();
+                        if (self.outputBuffer.length) {
+                            _send();
+                        } else {
+                            self.transmitting = false;
+                        }
+                    }
+                );
             } else {
                 const sendFn = (self.connectionType === 'serial') ? chrome.serial.send : chrome.sockets.tcp.send;
                 sendFn(self.connectionId, _data, function (sendInfo) {
@@ -627,8 +799,8 @@ export const serial = {
         listeners: [],
 
         addListener: function (function_reference) {
-            // BLE: chrome API 없이 리스너만 저장 (데이터는 notification에서 직접 전달)
-            if (serial.connectionType !== 'ble') {
+            // BLE, SPP: chrome API 없이 리스너만 저장 (데이터는 notification/subscribe에서 직접 전달)
+            if (serial.connectionType !== 'ble' && serial.connectionType !== 'spp') {
                 const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
                 if (chromeType && chromeType.onReceive) {
                     chromeType.onReceive.addListener(function_reference);
@@ -637,7 +809,7 @@ export const serial = {
             this.listeners.push(function_reference);
         },
         removeListener: function (function_reference) {
-            if (serial.connectionType !== 'ble') {
+            if (serial.connectionType !== 'ble' && serial.connectionType !== 'spp') {
                 const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
                 for (let i = (this.listeners.length - 1); i >= 0; i--) {
                     if (this.listeners[i] == function_reference) {
@@ -662,7 +834,7 @@ export const serial = {
         listeners: [],
 
         addListener: function (function_reference) {
-            if (serial.connectionType !== 'ble') {
+            if (serial.connectionType !== 'ble' && serial.connectionType !== 'spp') {
                 const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
                 if (chromeType && chromeType.onReceiveError) {
                     chromeType.onReceiveError.addListener(function_reference);
@@ -671,7 +843,7 @@ export const serial = {
             this.listeners.push(function_reference);
         },
         removeListener: function (function_reference) {
-            if (serial.connectionType !== 'ble') {
+            if (serial.connectionType !== 'ble' && serial.connectionType !== 'spp') {
                 const chromeType = (serial.connectionType === 'serial') ? chrome.serial : chrome.sockets.tcp;
                 for (let i = (this.listeners.length - 1); i >= 0; i--) {
                     if (this.listeners[i] == function_reference) {

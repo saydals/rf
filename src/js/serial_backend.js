@@ -105,9 +105,9 @@ export function initializeSerialBackend() {
         }
     };
 
-    // Cordova 환경에서 BLE 스캔 버튼 표시
+    // Cordova 환경에서 BLE/SPP 버튼 표시
     if (GUI.isCordova()) {
-        $('#ble-scan-btn').addClass('visible');
+        $('#wireless-scan-btns').addClass('visible');
     }
 
 
@@ -123,8 +123,78 @@ export function initializeSerialBackend() {
         GUI.updateManualPortVisibility();
     });
 
+    // SPP 장치 목록 버튼 (Cordova 전용) — 다이얼로그로 장치 목록 표시
+    $('#spp-list-btn').on('click', function(e) {
+        e.preventDefault();
+        const btn = $(this);
+        const dialog = document.getElementById('dialogSppDeviceList');
+        const content = $('#dialogSppDeviceList-content');
+
+        if (!dialog || !dialog.showModal) return;
+
+        // 로딩 표시
+        content.html('<div class="spp-device-list-loading">' + i18n.getMessage('sppListing') + '...</div>');
+        dialog.showModal();
+
+        serial.listSPPDevices(function (devices, error) {
+            if (error) {
+                content.html('<div class="spp-device-list-empty">' +
+                    i18n.getMessage('sppDeviceListError') + '<br><small>' + error + '</small></div>');
+                return;
+            }
+            if (!devices || devices.length === 0) {
+                content.html('<div class="spp-device-list-empty">' + i18n.getMessage('sppDeviceListEmpty') + '</div>');
+                return;
+            }
+
+            // 장치 목록 생성
+            let html = '<ul class="spp-device-list-items">';
+            devices.forEach(function (device) {
+                const address = device.path ? device.path.substring(4) : device.address;
+                const name = device.displayName || device.name || address;
+                html += '<li class="spp-device-item" data-address="' + address + '" data-name="' + name.replace(/"/g, '&quot;') + '">';
+                html += '<span class="spp-device-icon"><em class="fas fa-bluetooth-b"></em></span>';
+                html += '<span class="spp-device-name">' + name.replace('[SPP]', '').trim() + '</span>';
+                html += '<span class="spp-device-address">' + address + '</span>';
+                html += '</li>';
+            });
+            html += '</ul>';
+            content.html(html);
+
+            // 장치 클릭 시 연결 처리
+            content.find('.spp-device-item').on('click', function() {
+                const addr = $(this).data('address');
+                const name = $(this).data('name');
+
+                // 포트 오버라이드에 SPP 주소 설정
+                $('#port-override').val('spp:' + addr);
+
+                // Manual selection 선택
+                const portSelect = $('#port');
+                portSelect.val('manual');
+
+                // 포트 오버라이드 표시
+                $('#port-override-option').show();
+                GUI.updateManualPortVisibility();
+
+                // 다이얼로그 닫기
+                dialog.close();
+
+                // 연결 시도
+                console.log('SPP: connecting to ' + name + ' (' + addr + ')');
+                $('a.connect').click();
+            });
+        });
+
+        // 다이얼로그 닫기 버튼
+        $('#dialogSppDeviceList-closebtn').off('click').on('click', function(e) {
+            e.preventDefault();
+            dialog.close();
+        });
+    });
+
     // BLE 스캔 버튼 (Cordova 전용)
-    $('#ble-scan-btn a').on('click', function(e) {
+    $('#ble-scan-btn').on('click', function(e) {
         e.preventDefault();
         const btn = $(this);
         btn.text(i18n.getMessage('bleScanning'));

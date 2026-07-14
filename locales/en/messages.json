@@ -7974,5 +7974,25 @@
     "bleScanning": {
         "message": "Scanning...",
         "description": "Button label while BLE scanning is in progress"
+    },
+    "sppList": {
+        "message": "SPP",
+        "description": "Button label to list paired Bluetooth Classic SPP devices (Cordova/APK only)"
+    },
+    "sppListing": {
+        "message": "Listing...",
+        "description": "Button label while SPP device listing is in progress"
+    },
+    "sppDeviceListTitle": {
+        "message": "Bluetooth SPP Devices",
+        "description": "Title for the SPP device selection dialog"
+    },
+    "sppDeviceListEmpty": {
+        "message": "No paired Bluetooth devices found.",
+        "description": "Message shown when no SPP devices are paired"
+    },
+    "sppDeviceListError": {
+        "message": "Bluetooth error. Check if Bluetooth is ON and paired.",
+        "description": "Error message when SPP device listing fails"
     }
 }

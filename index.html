@@ -63,6 +63,10 @@
             <em class="fas fa-bars"></em>
         </div>
         <div id="logo-desktop"></div>
+        <div id="wireless-scan-btns">
+            <a href="#" class="regular-button" id="spp-list-btn" i18n="sppList">SPP</a>
+            <a href="#" class="regular-button" id="ble-scan-btn" i18n="bleScan">BLE</a>
+        </div>
         <div id="port-picker">
             <div id="port-override-option">
                 <label for="port-override">
@@ -116,9 +120,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-        <div id="ble-scan-btn">
-            <a href="#" class="regular-button" i18n="bleScan">BLE Scan</a>
         </div>
         <div class="header-wrapper">
             <div id="quad-status_wrapper">
@@ -274,6 +275,18 @@
         </div>
         <div class="buttons">
             <a href="#" class="dialogConnectWarning-closebtn regular-button" i18n="close"></a>
+        </div>
+    </dialog>
+
+    <dialog id="dialogSppDeviceList">
+        <h3 i18n="sppDeviceListTitle">Bluetooth SPP Devices</h3>
+        <div class="content">
+            <div id="dialogSppDeviceList-content" class="spp-device-list">
+                <div class="spp-device-list-loading" i18n="sppListing">Listing...</div>
+            </div>
+        </div>
+        <div class="buttons">
+            <a href="#" id="dialogSppDeviceList-closebtn" class="regular-button" i18n="close"></a>
         </div>
     </dialog>
 

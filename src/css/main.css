@@ -2686,24 +2686,105 @@ input {
         margin-right: 0 !important;
     }
 }
-/* BLE 스캔 버튼 (기본 숨김, Cordova 모드에서 JS로 표시) */
-#ble-scan-btn {
+/* BLE/SPP 무선 스캔 버튼 래퍼 (기본 숨김, Cordova 모드에서 JS로 표시) */
+#wireless-scan-btns {
     display: none;
-    margin: 6px 0 0 0;
-    text-align: center;
+    align-items: center;
+    gap: 8px;
+    margin-right: 15px;
 }
 
-#ble-scan-btn.visible {
-    display: block;
+#wireless-scan-btns.visible {
+    display: flex;
 }
 
-#ble-scan-btn a.regular-button {
+#wireless-scan-btns a.regular-button {
     display: inline-block;
     width: auto;
-    min-width: 100px;
-    padding: 6px 16px;
+    min-width: 90px;
+    padding: 6px 12px;
     font-size: 12px;
     line-height: 20px;
+}
+
+/* SPP 장치 목록 다이얼로그 */
+#dialogSppDeviceList {
+    border: none;
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+#dialogSppDeviceList h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: #333;
+}
+
+#dialogSppDeviceList .spp-device-list {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+#dialogSppDeviceList .spp-device-list-loading,
+#dialogSppDeviceList .spp-device-list-empty {
+    text-align: center;
+    padding: 20px;
+    color: #888;
+    font-size: 14px;
+}
+
+#dialogSppDeviceList .spp-device-list-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+#dialogSppDeviceList .spp-device-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s;
+    gap: 10px;
+}
+
+#dialogSppDeviceList .spp-device-item:hover {
+    background: #f0f0f0;
+}
+
+#dialogSppDeviceList .spp-device-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #007aff;
+    border-radius: 50%;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+#dialogSppDeviceList .spp-device-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    color: #222;
+}
+
+#dialogSppDeviceList .spp-device-address {
+    font-size: 11px;
+    color: #999;
+    font-family: monospace;
+}
+
+#dialogSppDeviceList .buttons {
+    text-align: right;
 }
 
 

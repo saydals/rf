@@ -14,10 +14,10 @@ Rotorflight Configurator Android 앱에서 **Bluetooth Classic SPP (Serial Port 
 |:--:|------|------|
 | ① | Cordova 플러그인 | `cordova-plugin-bluetooth-serial` |
 | ② | UI 통합 방식 | 기존 포트 드롭다운에 `spp:주소` 프리픽스로 통합 |
-| ③ | 스캔 방식 | **페어링된 장치만** 표시 (`bluetoothSerial.list()`) |
-| ④ | 이름 없는 장치 | 스캔 결과에서 **제외 (필터링)** |
+| ③ | 장치 표시 방식 | **스캔(scan)하지 않음** — 안드로이드에 **이미 페어링된 장치**를 `bluetoothSerial.list()`로 조회하여 목록 표시 |
+| ④ | 이름 없는 장치 | 목록에서 **제외 (필터링)** |
 | ⑤ | 통신 속도 | **115200 고정** |
-| ⑥ | 스캔 버튼 | `SPP SCAN` / `BLE SCAN` 별도 분리 |
+| ⑥ | UI 버튼 | `SPP SCAN` / `BLE SCAN` 대신 **`[SPP]` / `[BLE]` 버튼**으로 변경 (클릭 시 페어링된 장치 목록을 드롭다운/팝업으로 표시) |
 | ⑦ | 연결 후 초기화 | BLE와 동일하게 `exit\r\n` 전송 |
 | ⑧ | 프레임 처리 | MSP 재조립 **불필요** (스트리밍, serial과 동일) |
 
@@ -52,8 +52,8 @@ Rotorflight Configurator Android 앱에서 **Bluetooth Classic SPP (Serial Port 
 ├── #logo-desktop          [Logo 240-340px]
 ├── (여백)                  flex 자연 공간
 ├── #wireless-scan-btns    ← 신규 (margin-left: auto + margin-right: 10px)
-│   ├── [SPP SCAN]
-│   └── [BLE SCAN]
+│   ├── [SPP]
+│   └── [BLE]
 ├── #port-picker           (margin-left: auto 제거 → 0 또는 없음)
 │   └── #portsinput
 │       ├── [Port: ▼]
@@ -68,7 +68,7 @@ Rotorflight Configurator Android 앱에서 **Bluetooth Classic SPP (Serial Port 
 
 **시각적 결과**:
 ```
-[Logo]       [SPP SCAN] [BLE SCAN]  [Port ▼] [Auto□] [Baud ▼] [ShowAll□] [Status] [Flash] [Connect]
+[Logo]       [SPP] [BLE]  [Port ▼] [Auto□] [Baud ▼] [ShowAll□] [Status] [Flash] [Connect]
 ```
 
 ### 3.3 CSS 변경
@@ -92,6 +92,8 @@ Rotorflight Configurator Android 앱에서 **Bluetooth Classic SPP (Serial Port 
  * 
  * cordova-plugin-bluetooth-serial 기반 Bluetooth Classic SPP 구현.
  * 시리얼 스트리밍 방식이므로 MTU 제한 없음, MSP 재조립 불필요.
+ *
+ * ★ 스캔(scan) 개념 없음 — 안드로이드에 이미 페어링된 장치를 목록으로 보여줌.
  */
 
 // SPP UUID (표준)
@@ -103,8 +105,8 @@ function getSPP() {
     return null;
 }
 
-// --- SPP 장치 검색 (페어링된 장치만) ---
-export function sppScan(onComplete, onError) {
+// --- 페어링된 SPP 장치 목록 조회 (scan 아님) ---
+export function sppList(onComplete, onError) {
     const ssp = getSPP();
     if (!ssp) {
         if (onError) onError('bluetoothSerial plugin not available');
@@ -200,7 +202,7 @@ import {
     sppConnect,
     sppDisconnect,
     sppWrite,
-    sppScan,
+    sppList,
     sppIsEnabled,
 } from "@/js/spp_central.js";
 ```
@@ -331,12 +333,12 @@ getDevices: function (callback) {
 },
 ```
 
-**변경 ⑥**: `scanSPPDevices()` 함수 추가
+**변경 ⑥**: `listSPPDevices()` 함수 추가
 ```js
-scanSPPDevices: function (callback) {
+listSPPDevices: function (callback) {
     const self = this;
     sppIsEnabled(function () {
-        sppScan(
+        sppList(
             function (devices) {
                 self.cachedSPPDevices = devices;
                 const mapped = devices.map(function (d) {
@@ -348,7 +350,7 @@ scanSPPDevices: function (callback) {
                 if (callback) callback(mapped);
             },
             function (error) {
-                console.error('SPP scan failed:', error);
+                console.error('SPP list failed:', error);
                 if (callback) callback([]);
             }
         );
@@ -439,26 +441,26 @@ if (GUI.isCordova()) {
 }
 
 // SPP 스캔 버튼
-$('#spp-scan-btn a').on('click', function(e) {
+$('#spp-list-btn a').on('click', function(e) {
     e.preventDefault();
     const btn = $(this);
-    btn.text(i18n.getMessage('sppScanning'));
+    btn.text(i18n.getMessage('sppListing'));
     btn.addClass('disabled');
     
-    serial.scanSPPDevices(function (devices) {
+    serial.listSPPDevices(function (devices) {
         btn.text(i18n.getMessage('sppScan'));
         btn.removeClass('disabled');
         
         if (devices && devices.length > 0) {
-            console.log(`SPP scan complete: ${devices.length} device(s) found`);
+            console.log(`SPP list complete: ${devices.length} device(s) found`);
         } else {
-            console.log('SPP scan complete: no devices found');
+            console.log('SPP list complete: no devices found');
         }
         PortHandler.check_serial_devices();
     });
 });
 
-// BLE 스캔 버튼 (기존 코드를 #spp-scan-btn 패턴에 맞춰 조정)
+// BLE 스캔 버튼 (기존 코드를 #spp-list-btn 패턴에 맞춰 조정)
 $('#ble-scan-btn a').on('click', function(e) {
     // ... existing code, 버튼 ID 변경 ...
 });
@@ -474,8 +476,8 @@ $('#ble-scan-btn a').on('click', function(e) {
     
     <!-- 신규: SPP/BLE 스캔 버튼 (기본 숨김, Cordova에서 표시) -->
     <div id="wireless-scan-btns">
-        <a href="#" class="regular-button" id="spp-scan-btn" i18n="sppScan">SPP SCAN</a>
-        <a href="#" class="regular-button" id="ble-scan-btn" i18n="bleScan">BLE SCAN</a>
+        <a href="#" class="regular-button" id="spp-list-btn" i18n="sppList">SPP</a>
+        <a href="#" class="regular-button" id="ble-scan-btn" i18n="bleScan">BLE</a>
     </div>
     
     <div id="port-picker">...</div>
@@ -550,15 +552,15 @@ $('#ble-scan-btn a').on('click', function(e) {
 
 | 파일 | 유형 | 내용 |
 |------|:--:|------|
-| `src/js/spp_central.js` | 신규 | SPP scan/connect/write/disconnect (약 100줄) |
-| `src/js/serial.js` | 수정 | import, connectSPP, scanSPPDevices, getDevices, send, disconnect (약 +100줄) |
+| `src/js/spp_central.js` | 신규 | SPP list/connect/write/disconnect (약 100줄) |
+| `src/js/serial.js` | 수정 | import, connectSPP, listSPPDevices, getDevices, send, disconnect (약 +100줄) |
 | `src/js/port_handler.js` | 수정 | check_spp_devices, portRecognized 확장 (약 +30줄) |
 | `src/js/serial_backend.js` | 수정 | SPP 버튼 바인딩 + BLE 버튼 ID 변경 (약 +20줄, -5줄) |
 | `index.html` | 수정 | #wireless-scan-btns 추가, #ble-scan-btn 제거 (약 +5줄, -3줄) |
 | `src/css/main.css` | 수정 | 신규 CSS 블록, 기존 ble-scan-btn CSS 제거 (약 +20줄, -18줄) |
 | `package.json` | 수정 | cordova-plugin-bluetooth-serial 추가 (+1줄) |
 | `app/android/config.xml` | 수정 | BLUETOOTH_CONNECT 권한 (+3줄) |
-| `locales/` | 수정 | i18n 키: sppScan, sppScanning 각 언어별 (약 +6줄/언어) |
+| `locales/` | 수정 | i18n 키: sppList, sppListing 각 언어별 (약 +6줄/언어) |
 
 **총 예상 코드량**: 신규 약 100줄 + 수정 약 180줄 = **~280줄**
 
@@ -579,7 +581,7 @@ $('#ble-scan-btn a').on('click', function(e) {
 
 - [ ] `cordova-plugin-bluetooth-serial` npm install 성공
 - [ ] APK 빌드 성공
-- [ ] Android 기기에서 SPP SCAN 버튼 표시됨
+- [ ] Android 기기에서 SPP 버튼 표시됨
 - [ ] HC-05/HC-06 페어링된 장치가 스캔 결과에 나타남
 - [ ] 이름 없는 장치는 스캔 결과에서 제외됨
 - [ ] SPP 연결 → `exit

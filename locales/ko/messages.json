@@ -11814,5 +11814,30 @@
         "message": "Don't show again",
         "english": "Don't show again",
         "status": "New entry. Please translate!"
+    },
+    "sppList": {
+        "message": "SPP",
+        "english": "SPP",
+        "status": "New entry. Please translate!"
+    },
+    "sppListing": {
+        "message": "목록 조회 중...",
+        "english": "Listing...",
+        "status": "New entry. Please translate!"
+    },
+    "sppDeviceListTitle": {
+        "message": "블루투스 SPP 장치",
+        "english": "Bluetooth SPP Devices",
+        "status": "New entry. Please translate!"
+    },
+    "sppDeviceListEmpty": {
+        "message": "페어링된 블루투스 장치가 없습니다.",
+        "english": "No paired Bluetooth devices found.",
+        "status": "New entry. Please translate!"
+    },
+    "sppDeviceListError": {
+        "message": "블루투스 오류. 블루투스가 켜져 있고 장치가 저장되었는지 확인하세요.",
+        "english": "Bluetooth error. Check if Bluetooth is ON and paired.",
+        "status": "New entry. Please translate!"
     }
 }
