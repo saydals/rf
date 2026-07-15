@@ -368,9 +368,24 @@ export const MSP = {
                 return;
             }
 
-            // BLE 환경: 1회만 전송 (setInterval 없음)
+            // BLE: 500→1000→2000→5000ms 무한 backoff (setTimeout 체인)
             if (serial.connectionType === 'ble') {
-                serial.send(bufferOut, false);
+                const delays = [500, 1000, 2000, 5000];
+                let cycleIndex = 0;
+                function trySend() {
+                    if (!serial.connected || CONFIGURATOR.cliEngineActive) {
+                        console.log('BLE retry aborted');
+                        if (doCallbackOnError) obj.callback?.();
+                        return;
+                    }
+                    if (MSP.callbacks.indexOf(obj) === -1) return;
+
+                    serial.send(bufferOut, false);
+                    const delay = delays[cycleIndex];
+                    cycleIndex = (cycleIndex + 1) % delays.length;
+                    obj.timer = setTimeout(trySend, delay);
+                }
+                obj.timer = setTimeout(trySend, 300);
             } else {
                 // USB/TCP: 3초 간격 재시도
                 obj.timer = setInterval(function () {
@@ -459,10 +474,6 @@ export const MSP = {
                 callbackOnError: false,
             };
 
-            if (!requestExists) {
-                serial.send(bufferOut, false);
-            }
-
             MSP.callbacks.push(obj);
 
             const shouldSend = (data || !requestExists) && !batchSeenCodes.has(code);
@@ -484,11 +495,22 @@ export const MSP = {
                 combined.set(new Uint8Array(buf), offset);
                 offset += buf.byteLength;
             }
-            serial.send(combined.buffer, function (sendInfo) {
-                if (sendInfo.bytesSent !== combined.byteLength) {
-                    console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
-                }
-            });
+
+            // BLE 500→1000→2000→5000ms 무한 backoff (setTimeout 체인)
+            const delays = [500, 1000, 2000, 5000];
+            let cycleIndex = 0;
+            function batchSend() {
+                if (!serial.connected || CONFIGURATOR.cliEngineActive) return;
+                serial.send(combined.buffer, function (sendInfo) {
+                    if (sendInfo.bytesSent !== combined.byteLength) {
+                        console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
+                    }
+                });
+                const delay = delays[cycleIndex];
+                cycleIndex = (cycleIndex + 1) % delays.length;
+                setTimeout(batchSend, delay);
+            }
+            setTimeout(batchSend, 300);
         }
 
         // 모든 응답 대기 with 5s timeout per request
