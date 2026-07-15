@@ -368,24 +368,28 @@ export const MSP = {
                 return;
             }
 
-            // 3초 간격 무한 재시도 (응답 올 때까지 계속)
-            obj.timer = setInterval(function () {
-                console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab}`);
-
-                // 연결 끊김 또는 CLI 진입 중이면 중단
-                if (!serial.connected || CONFIGURATOR.cliEngineActive) {
-                    console.log('Cancelling MSP request');
-                    const i = MSP.callbacks.indexOf(obj);
-                    if (i > -1) MSP.callbacks.splice(i, 1);
-                    clearInterval(obj.timer);
-                    if (doCallbackOnError) {
-                        obj.callback?.();
-                    }
-                    return;
-                }
-
+            // BLE 환경: 1회만 전송 (setInterval 없음)
+            if (serial.connectionType === 'ble') {
                 serial.send(bufferOut, false);
-            }, 3000);
+            } else {
+                // USB/TCP: 3초 간격 재시도
+                obj.timer = setInterval(function () {
+                    console.log(`MSP data request timed-out: ${code} direction: ${MSP.message_direction} tab: ${GUI.active_tab}`);
+
+                    if (!serial.connected || CONFIGURATOR.cliEngineActive) {
+                        console.log('Cancelling MSP request');
+                        const i = MSP.callbacks.indexOf(obj);
+                        if (i > -1) MSP.callbacks.splice(i, 1);
+                        clearInterval(obj.timer);
+                        if (doCallbackOnError) {
+                            obj.callback?.();
+                        }
+                        return;
+                    }
+
+                    serial.send(bufferOut, false);
+                }, 3000);
+            }
         }
 
         MSP.callbacks.push(obj);
@@ -402,6 +406,119 @@ export const MSP = {
         }
 
         return true;
+    },
+
+    /**
+     * Batch-send multiple MSP requests using a single BLE write.
+     * Non-BLE falls back to sequential promise() calls.
+     * @param {Array<{code:number, data:boolean|Uint8Array}>} requests
+     * @param {Function} [allCallback] - called with results array when all complete
+     */
+    send_batch: function (requests, allCallback) {
+        const self = this;
+        if (!requests || !requests.length) {
+            if (allCallback) allCallback([]);
+            return true;
+        }
+
+        if (!serial.connected || serial.connectionType !== 'ble') {
+            (async () => {
+                const results = [];
+                for (const req of requests) {
+                    try {
+                        const r = await self.promise(req.code, req.data || false);
+                        results.push(r);
+                    } catch (e) {
+                        results.push(null);
+                    }
+                }
+                if (allCallback) allCallback(results);
+            })();
+            return true;
+        }
+
+        const toSend = [];
+        const batchSeenCodes = new Set();
+        const promises = [];
+
+        for (const req of requests) {
+            const code = req.code;
+            const data = req.data || false;
+            const bufferOut = (code <= 254) ? self.encode_message_v1(code, data) : self.encode_message_v2(code, data);
+
+            let requestExists = false;
+            for (const value of MSP.callbacks) {
+                if (value.code === code) { requestExists = true; break; }
+            }
+
+            const obj = {
+                code: code,
+                requestBuffer: bufferOut,
+                callback: false,
+                timer: false,
+                callbackOnError: false,
+            };
+
+            if (!requestExists) {
+                serial.send(bufferOut, false);
+            }
+
+            MSP.callbacks.push(obj);
+
+            const shouldSend = (data || !requestExists) && !batchSeenCodes.has(code);
+            if (shouldSend) {
+                toSend.push(bufferOut);
+                batchSeenCodes.add(code);
+            }
+
+            promises.push(new Promise((resolve) => {
+                obj.callback = function(_data) { resolve(_data); };
+            }));
+        }
+
+        if (toSend.length > 0) {
+            const totalLen = toSend.reduce((sum, buf) => sum + buf.byteLength, 0);
+            const combined = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const buf of toSend) {
+                combined.set(new Uint8Array(buf), offset);
+                offset += buf.byteLength;
+            }
+            serial.send(combined.buffer, function (sendInfo) {
+                if (sendInfo.bytesSent !== combined.byteLength) {
+                    console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
+                }
+            });
+        }
+
+        // 모든 응답 대기 with 5s timeout per request
+        Promise.all(promises.map(function(p) {
+            return Promise.race([
+                p,
+                new Promise(function(_, reject) {
+                    setTimeout(function() { reject(new Error('MSP batch response timeout')); }, 5000);
+                })
+            ]);
+        })).then(function(results) {
+            if (allCallback) allCallback(results);
+        }).catch(function(err) {
+            console.error('MSP batch error:', err);
+            if (allCallback) allCallback([]);
+        });
+
+        return true;
+    },
+
+    /**
+     * Promise wrapper for send_batch.
+     * @param {Array<{code:number, data:boolean|Uint8Array}>} requestSpecs
+     * @returns {Promise<Array>}
+     */
+    batchCodes: function (requestSpecs) {
+        const self = this;
+        return new Promise(function(resolve) {
+            self.send_batch(requestSpecs, resolve);
+        });
     },
 
     /**

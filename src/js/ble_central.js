@@ -26,7 +26,7 @@
 
 export const BLE_SCAN_SECONDS = 5;       // Nordic 플러그인: 2초 primary + 3초 fallback
 export const BLE_DEFAULT_MTU = 23;
-export const BLE_REQUESTED_MTU = 247;    // Nordic BleBridgeManager.initialize() 가 자동 협상
+export const BLE_REQUESTED_MTU = 515;    // Nordic BleBridgeManager.initialize() 가 자동 협상
 
 // ──────────────────────────────────────────────────────────────────────────
 // NordicBle 인스턴스 접근

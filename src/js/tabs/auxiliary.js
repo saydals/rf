@@ -29,16 +29,11 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_RC))
-            .then(() => MSP.promise(MSPCodes.MSP_BOXIDS))
-            .then(() => MSP.promise(MSPCodes.MSP_BOXNAMES))
-            .then(() => MSP.promise(MSPCodes.MSP_RSSI_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_MODE_RANGES))
-            .then(() => MSP.promise(MSPCodes.MSP_MODE_RANGES_EXTRA))
-            .then(() => MSP.promise(MSPCodes.MSP_SERIAL_CONFIG))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_BOXIDS, data: false },
+            { code: MSPCodes.MSP_MODE_RANGES, data: false },
+            { code: MSPCodes.MSP_MODE_RANGES_EXTRA, data: false },
+        ]).then(() => callback?.());
     }
 
     function save_data(callback) {

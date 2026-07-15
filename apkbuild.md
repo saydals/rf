@@ -13,12 +13,12 @@ Capacitor/NW.js 없이 Cordova 전용으로 구성되어 있습니다.
 | Android SDK | API 35, Build Tools 35.0.0 | `ls $ANDROID_SDK_ROOT/platforms/android-35` |
 | Gradle      | 8.10+                      | `gradle --version`                          |
 
-### 환경 변수
+### 환경 변수 (실제 빌드 검증 완료 경로)
 
 ```bash
 export ANDROID_SDK_ROOT=/home/betaflight/android-sdk
-export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-export PATH=$PATH:/home/betaflight/gradle/gradle-8.10/bin
+export PATH=$PATH:$ANDROID_SDK_ROOT/platform-tools
+export PATH=/home/betaflight/gradle-8.10/bin:$PATH
 ```
 
 ## 빌드 방법

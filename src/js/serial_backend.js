@@ -642,11 +642,13 @@ async function onConnect() {
         $('#tabs ul.mode-connected').show();
 
         await new Promise((resolve) => setTimeout(resolve, 100));
-        await MSP.promise(MSPCodes.MSP_BOXNAMES, false);
-        await MSP.promise(MSPCodes.MSP_FEATURE_CONFIG, false);
-        await MSP.promise(MSPCodes.MSP_BATTERY_CONFIG, false);
-        await MSP.promise(MSPCodes.MSP_STATUS, false);
-        await MSP.promise(MSPCodes.MSP_DATAFLASH_SUMMARY, false);
+        await MSP.batchCodes([
+            { code: MSPCodes.MSP_BOXNAMES, data: false },
+            { code: MSPCodes.MSP_FEATURE_CONFIG, data: false },
+            { code: MSPCodes.MSP_BATTERY_CONFIG, data: false },
+            { code: MSPCodes.MSP_STATUS, data: false },
+            { code: MSPCodes.MSP_DATAFLASH_SUMMARY, data: false },
+        ]);
 
         if (FC.CONFIG.boardType == 0 || FC.CONFIG.boardType == 2) {
             startLiveDataRefreshTimer();

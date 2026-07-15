@@ -116,7 +116,8 @@ public class NordicBlePlugin extends CordovaPlugin {
     }
 
     // Plugin instance state
-    private static final int DESIRED_MTU = 247;
+    private static final int DESIRED_MTU = 515;
+    private static final int DESIRED_MTU_FALLBACK = 247;
 
     private static final int REQUEST_BLE_PERMISSIONS = 84021;
     private static final String[] PERMISSIONS_S_PLUS = {
@@ -323,6 +324,7 @@ public class NordicBlePlugin extends CordovaPlugin {
         }
         connectedAddress = null;
         bleManager = new BleBridgeManager(cordova.getContext(), this, profile);
+        bleManager.setConnectCallback(callbackContext);
         bleManager.setConnectionObserver(new ConnectionObserver() {
             @Override public void onDeviceConnecting(@NonNull BluetoothDevice d) { }
             @Override
@@ -337,13 +339,14 @@ public class NordicBlePlugin extends CordovaPlugin {
             }
             @Override
             public void onDeviceReady(@NonNull BluetoothDevice d) {
-                JSONObject res = new JSONObject();
-                try {
-                    res.put("success", true);
-                    res.put("address", d.getAddress());
-                    res.put("mtu", bleManager.getNegotiatedMtu());
-                } catch (JSONException e) { Log.e(TAG, "connect result serialization failed", e); }
-                callbackContext.success(res);
+                Log.i(TAG, "onDeviceReady called for " + d.getAddress() + ", scheduling MTU fallback");
+                // 500ms 후에도 MTU 협상이 안 끝났으면 현재 값으로 결과 전송
+                final BluetoothDevice device = d;
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    if (bleManager != null) {
+                        bleManager.onDeviceReadyFallback(device);
+                    }
+                }, 500);
             }
             @Override public void onDeviceDisconnecting(@NonNull BluetoothDevice d) { }
             @Override
@@ -355,6 +358,9 @@ public class NordicBlePlugin extends CordovaPlugin {
                         evt.put("reason", reason);
                     } catch (JSONException e) { Log.e(TAG, "disconnected event serialization failed", e); }
                 });
+                if (bleManager != null) {
+                    bleManager.clearConnectCallback();
+                }
             }
         });
         bleManager.connect(device)
@@ -650,6 +656,7 @@ public class NordicBlePlugin extends CordovaPlugin {
         private int negotiatedMtu = 23;
         private BluetoothGattCharacteristic writeCharacteristic;
         private BluetoothGattCharacteristic notifyCharacteristic;
+        private CallbackContext connectCallback;
 
         BleBridgeManager(@NonNull Context context, NordicBlePlugin plugin, KnownDevice profile) {
             super(context);
@@ -658,6 +665,41 @@ public class NordicBlePlugin extends CordovaPlugin {
             this.writeUuid = UUID.fromString(profile.writeUuid);
             this.notifyUuid = UUID.fromString(profile.notifyUuid);
             this.profileName = profile.name;
+        }
+
+        void setConnectCallback(CallbackContext callbackContext) {
+            this.connectCallback = callbackContext;
+        }
+
+        void clearConnectCallback() {
+            this.connectCallback = null;
+        }
+
+        private void sendConnectResult(BluetoothDevice device, int mtu) {
+            if (connectCallback == null) return;
+            try {
+                JSONObject res = new JSONObject();
+                res.put("success", true);
+                res.put("address", device.getAddress());
+                res.put("mtu", mtu);
+                connectCallback.success(res);
+            } catch (JSONException e) {
+                Log.e(TAG, "connect result serialization failed", e);
+                connectCallback.success();
+            } finally {
+                clearConnectCallback();
+            }
+        }
+
+        /** 
+         * onDeviceReady fallback: MTU 협상이 아직 안 끝났으면 현재 값으로 전송.
+         * .with()/.fail() 콜백이 먼저 처리되면 connectCallback이 null이므로 무시됨.
+         */
+        void onDeviceReadyFallback(BluetoothDevice device) {
+            if (connectCallback == null) return;
+            int mtu = getNegotiatedMtu();
+            Log.i(TAG, "onDeviceReady fallback MTU for " + profileName + ": " + mtu);
+            sendConnectResult(device, mtu);
         }
 
         int getNegotiatedMtu() { return negotiatedMtu; }
@@ -734,8 +776,23 @@ public class NordicBlePlugin extends CordovaPlugin {
                         .with((device, mtu) -> {
                             negotiatedMtu = mtu;
                             Log.i(TAG, "MTU negotiated to " + mtu + " for " + profileName);
+                            sendConnectResult(device, mtu);
                         })
-                        .fail((device, status) -> Log.w(TAG, "MTU request failed with status " + status))
+                        .fail((device, status) -> {
+                            Log.w(TAG, "MTU request failed with status " + status + " for " + profileName);
+                            // 515 실패 시 247로 1회 fallback 재시도
+                            requestMtu(DESIRED_MTU_FALLBACK)
+                                    .with((dev2, mtu2) -> {
+                                        negotiatedMtu = mtu2;
+                                        Log.i(TAG, "MTU fallback negotiated to " + mtu2 + " for " + profileName);
+                                        sendConnectResult(device, mtu2);
+                                    })
+                                    .fail((dev2, status2) -> {
+                                        Log.w(TAG, "MTU fallback also failed with status " + status2);
+                                        sendConnectResult(device, negotiatedMtu);
+                                    })
+                                    .enqueue();
+                        })
                         .enqueue();
 
                 if (notifyCharacteristic != null) {

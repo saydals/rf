@@ -2786,6 +2786,41 @@ MspHelper.prototype.sendAdjustmentRanges = function(onCompleteCallback)
     send_next();
 };
 
+MspHelper.prototype.sendAdjustmentRangesBatch = function(onCompleteCallback)
+{
+    const requests = [];
+    for (let i = 0; i < FC.ADJUSTMENT_RANGES.length; i++) {
+        const r = FC.ADJUSTMENT_RANGES[i];
+        if (!r.dirty) continue;
+
+        r.dirty = false;
+        const buffer = [];
+        buffer.push8(i)
+              .push8(r.adjFunction)
+              .push8(r.enaChannel)
+              .push8((r.enaRange.start - 1500) / 5)
+              .push8((r.enaRange.end - 1500) / 5)
+              .push8(r.adjChannel)
+              .push8((r.adjRange1.start - 1500) / 5)
+              .push8((r.adjRange1.end - 1500) / 5)
+              .push8((r.adjRange2.start - 1500) / 5)
+              .push8((r.adjRange2.end - 1500) / 5)
+              .push16(r.adjMin)
+              .push16(r.adjMax)
+              .push8(r.adjStep);
+        requests.push({ code: MSPCodes.MSP_SET_ADJUSTMENT_RANGE, data: buffer });
+    }
+
+    if (!requests.length) {
+        if (onCompleteCallback) onCompleteCallback();
+        return;
+    }
+
+    MSP.send_batch(requests, function() {
+        if (onCompleteCallback) onCompleteCallback();
+    });
+};
+
 MspHelper.prototype.sendVoltageMeterConfig = function(configIndex, onCompleteCallback)
 {
     const config = FC.VOLTAGE_METER_CONFIGS[configIndex];

@@ -137,27 +137,12 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
-        var index = 0;
-
-        function save_range() {
-            if (index < FC.ADJUSTMENT_RANGES.length) {
-                if (FC.ADJUSTMENT_RANGES[index].dirty) {
-                    FC.ADJUSTMENT_RANGES[index].dirty = false;
-                    mspHelper.sendAdjustmentRange(index++, save_range);
-                }
-                else {
-                    index++;
-                    save_range();
-                }
-            } else {
-                MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, function () {
-                    GUI.log(i18n.getMessage('eepromSaved'));
-                    callback?.();
-                });
-            }
-        }
-
-        save_range();
+        mspHelper.sendAdjustmentRangesBatch(function () {
+            MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, function () {
+                GUI.log(i18n.getMessage('eepromSaved'));
+                callback?.();
+            });
+        });
     }
 
     function setDirty() {
