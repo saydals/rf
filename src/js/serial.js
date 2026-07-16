@@ -677,10 +677,20 @@ export const serial = {
                 const fragments = fragmentMspFrame(_data, self.bleMtu);
                 let sentCount = 0;
                 const totalBytes = _data.byteLength;
+                const SEND_TIMEOUT_MS = 5000;
+                const entryTimer = setTimeout(() => {
+                    console.warn(`BLE send timeout (${totalBytes}B, ${fragments.length} fragments) - forcing recovery`);
+                    self.outputBuffer.shift();
+                    self.transmitting = false;
+                    if (self.outputBuffer.length) {
+                        _send();
+                    }
+                }, SEND_TIMEOUT_MS);
 
                 function sendNextFragment() {
                     if (sentCount >= fragments.length) {
                         // 모든 프래그먼트 전송 완료
+                        clearTimeout(entryTimer);
                         self.bytesSent += totalBytes;
                         if (_callback) {
                             _callback({ bytesSent: totalBytes });
@@ -701,6 +711,7 @@ export const serial = {
                             sendNextFragment();
                         },
                         function (error) {
+                            clearTimeout(entryTimer);
                             console.error('BLE send error:', error);
                             if (_callback) {
                                 _callback({ bytesSent: 0, error: error });

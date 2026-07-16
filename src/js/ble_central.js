@@ -185,11 +185,15 @@ export function bleStopNotification(_deviceId, _serviceUUID, _characteristicUUID
 }
 
 // ─── 데이터 쓰기 — NordicBle.send 래핑 ───
+let writeRequestId = 0;
 export function bleWrite(deviceId, serviceUUID, characteristicUUID, data, onSuccess, onFailure) {
     const ble = ensureNordicBle(onFailure);
     if (!ble) return;
-    ble.send(data)
-        .then((result) => { if (onSuccess) onSuccess(result); })
+    const requestId = `ble_${++writeRequestId}`;
+    ble.send(data, requestId)
+        .then((result) => {
+            if (onSuccess) onSuccess(result);
+        })
         .catch((err) => {
             console.error('[ble_central] write error:', err);
             if (onFailure) onFailure(err);

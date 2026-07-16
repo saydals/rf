@@ -196,23 +196,23 @@ class NordicBle extends EventEmitter {
         }
     }
 
-    async send(data, callback) {
+    async send(data, requestId) {
         if (!this.connected) {
             const r = { bytesSent: 0 };
-            if (callback) callback(r);
+            if (requestId) r.requestId = requestId;
             return r;
         }
         const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
         const payload = uint8ArrayToBase64(bytes);
         try {
-            const result = await execAsync('NordicBle', 'send', [{ data: payload }]);
+            const opts = { data: payload };
+            if (requestId) opts.requestId = requestId;
+            const result = await execAsync('NordicBle', 'send', [opts]);
             const bytesSent = (result && result.bytesSent) || bytes.byteLength;
             this.bytesSent += bytesSent;
-            if (callback) callback({ bytesSent });
-            return { bytesSent };
+            return { bytesSent, requestId: result?.requestId || requestId };
         } catch (err) {
             console.error('[NordicBle] send failed', err);
-            if (callback) callback({ bytesSent: 0 });
             throw err;
         }
     }

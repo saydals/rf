@@ -408,16 +408,27 @@ public class NordicBlePlugin extends CordovaPlugin {
         if (opts == null) { callbackContext.error("send options are required"); return true; }
         String b64 = opts.optString("data", null);
         if (b64 == null || b64.isEmpty()) { callbackContext.error("data is required"); return true; }
+        final String requestId = opts.optString("requestId", null);
+        final String effectiveRequestId = (requestId == null || requestId.isEmpty())
+                ? "req_" + System.currentTimeMillis()
+                : requestId;
         byte[] payload = Base64.decode(b64, Base64.NO_WRAP);
         WriteRequest request = bleManager.send(payload);
         if (request == null) { callbackContext.error("Not ready to send data"); return true; }
         request
                 .done(device -> {
                     JSONObject res = new JSONObject();
-                    try { res.put("bytesSent", payload.length); } catch (JSONException ignored) { }
+                    try {
+                        res.put("bytesSent", payload.length);
+                        res.put("requestId", effectiveRequestId);
+                    } catch (JSONException ignored) { }
                     callbackContext.success(res);
                 })
-                .fail((device, status) -> callbackContext.error("Send failed: " + status))
+                .fail((device, status) -> {
+                    JSONObject res = new JSONObject();
+                    try { res.put("requestId", effectiveRequestId); } catch (JSONException ignored) { }
+                    callbackContext.error("Send failed: " + status + " (requestId: " + effectiveRequestId + ")");
+                })
                 .enqueue();
         return true;
     }

@@ -378,6 +378,12 @@ export const MSP = {
                     }
                     if (MSP.callbacks.indexOf(obj) === -1) return;
 
+                    // P2: transmitting 상태 확인 - BLE 전용 전송 가드
+                    if (serial.transmitting) {
+                        obj.timer = setTimeout(trySend, 100);
+                        return;
+                    }
+
                     serial.send(bufferOut, false);
                     const jitter = Math.random() * 1000;
                     obj.timer = setTimeout(trySend, 1000 + jitter);
