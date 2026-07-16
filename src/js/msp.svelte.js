@@ -368,10 +368,8 @@ export const MSP = {
                 return;
             }
 
-            // BLE: 500→1000→2000→5000ms 무한 backoff (setTimeout 체인)
+            // BLE: 1000~2000ms 랜덤 지터 무한 반복 (setTimeout 체인)
             if (serial.connectionType === 'ble') {
-                const delays = [500, 1000, 2000, 5000];
-                let cycleIndex = 0;
                 function trySend() {
                     if (!serial.connected || CONFIGURATOR.cliEngineActive) {
                         console.log('BLE retry aborted');
@@ -381,11 +379,10 @@ export const MSP = {
                     if (MSP.callbacks.indexOf(obj) === -1) return;
 
                     serial.send(bufferOut, false);
-                    const delay = delays[cycleIndex];
-                    cycleIndex = (cycleIndex + 1) % delays.length;
-                    obj.timer = setTimeout(trySend, delay);
+                    const jitter = Math.random() * 1000;
+                    obj.timer = setTimeout(trySend, 1000 + jitter);
                 }
-                obj.timer = setTimeout(trySend, 300);
+                obj.timer = setTimeout(trySend, 0);
             } else {
                 // USB/TCP: 3초 간격 재시도
                 obj.timer = setInterval(function () {
@@ -496,9 +493,7 @@ export const MSP = {
                 offset += buf.byteLength;
             }
 
-            // BLE 500→1000→2000→5000ms 무한 backoff (setTimeout 체인)
-            const delays = [500, 1000, 2000, 5000];
-            let cycleIndex = 0;
+            // BLE 1000~2000ms 랜덤 지터 무한 반복 (setTimeout 체인)
             function batchSend() {
                 if (!serial.connected || CONFIGURATOR.cliEngineActive) return;
                 serial.send(combined.buffer, function (sendInfo) {
@@ -506,11 +501,10 @@ export const MSP = {
                         console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
                     }
                 });
-                const delay = delays[cycleIndex];
-                cycleIndex = (cycleIndex + 1) % delays.length;
-                setTimeout(batchSend, delay);
+                const jitter = Math.random() * 1000;
+                setTimeout(batchSend, 1000 + jitter);
             }
-            setTimeout(batchSend, 300);
+            setTimeout(batchSend, 0);
         }
 
         // 모든 응답 대기 with 5s timeout per request
