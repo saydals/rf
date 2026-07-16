@@ -231,7 +231,7 @@ export function initializeSerialBackend() {
     });
 
     // auto-connect
-    if (config.get('auto_connect') ?? true) {
+    if (config.get('auto_connect') ?? false) {
         // default or enabled by user
         GUI.auto_connect = true;
 
