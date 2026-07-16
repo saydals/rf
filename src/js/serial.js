@@ -9,7 +9,6 @@ import {
     bleWrite,
     bleScan,
     bleIsEnabled,
-    fragmentMspFrame,
     createMspReassembler,
     BLE_DEFAULT_MTU,
     BLE_REQUESTED_MTU,
@@ -673,24 +672,12 @@ export const serial = {
             }
 
             if (self.connectionType === 'ble') {
-                // BLE 전송: MTU 단편화
-                const fragments = fragmentMspFrame(_data, self.bleMtu);
-                let sentCount = 0;
+                // 전체 MSP 프레임을 단일 BLE write로 전송
                 const totalBytes = _data.byteLength;
-                const SEND_TIMEOUT_MS = 5000;
-                const entryTimer = setTimeout(() => {
-                    console.warn(`BLE send timeout (${totalBytes}B, ${fragments.length} fragments) - forcing recovery`);
-                    self.outputBuffer.shift();
-                    self.transmitting = false;
-                    if (self.outputBuffer.length) {
-                        _send();
-                    }
-                }, SEND_TIMEOUT_MS);
 
-                function sendNextFragment() {
-                    if (sentCount >= fragments.length) {
-                        // 모든 프래그먼트 전송 완료
-                        clearTimeout(entryTimer);
+                bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
+                    _data,
+                    function () {
                         self.bytesSent += totalBytes;
                         if (_callback) {
                             _callback({ bytesSent: totalBytes });
@@ -701,32 +688,20 @@ export const serial = {
                         } else {
                             self.transmitting = false;
                         }
-                        return;
-                    }
-
-                    bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
-                        fragments[sentCount],
-                        function () {
-                            sentCount++;
-                            sendNextFragment();
-                        },
-                        function (error) {
-                            clearTimeout(entryTimer);
-                            console.error('BLE send error:', error);
-                            if (_callback) {
-                                _callback({ bytesSent: 0, error: error });
-                            }
-                            self.outputBuffer.shift();
-                            if (self.outputBuffer.length) {
-                                _send();
-                            } else {
-                                self.transmitting = false;
-                            }
+                    },
+                    function (error) {
+                        console.error('BLE send error:', error);
+                        if (_callback) {
+                            _callback({ bytesSent: 0, error: error });
                         }
-                    );
-                }
-
-                sendNextFragment();
+                        self.outputBuffer.shift();
+                        if (self.outputBuffer.length) {
+                            _send();
+                        } else {
+                            self.transmitting = false;
+                        }
+                    }
+                );
             } else if (self.connectionType === 'spp') {
                 // SPP 전송: MTU 제한 없음, 그대로 전송
                 sppWrite(_data,
