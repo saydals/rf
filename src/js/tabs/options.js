@@ -103,7 +103,7 @@ const tab = {
 
   initBleKeepalive() {
     $("#opt-ble-keepalive")
-      .val(config.get("bleKeepalive") ?? 30)
+      .val(config.get("bleKeepalive") ?? 15)
       .on("change", function () {
         const val = parseInt($(this).val());
         config.set({ bleKeepalive: val });

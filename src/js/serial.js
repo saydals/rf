@@ -57,6 +57,7 @@ export const serial = {
 
     // BLE keepalive timer
     _keepaliveTimer: null,
+    _keepaliveLastActivity: 0,
 
     // BLE 전용 상태
     bleDevice:       null,     // 연결된 BLE 디바이스 객체
@@ -405,8 +406,9 @@ export const serial = {
     },
 
     /**
-     * BLE keepalive: 주기적으로 MSP_STATUS 전송하여 BLE 모듈 절전 모드 방지
-     * 간격: config.bleKeepalive (기본 30초), 0이면 사용 안 함
+     * BLE keepalive: 유휴 시간 기반 (마지막 MSP 통신 이후 N초 지나면 1회 전송)
+     * 불필요한 중복 트래픽 방지, 기본 15초, 0=사용 안 함
+     * 포그라운드에서만 동작 (document.hidden 체크)
      */
     _startBleKeepalive: function () {
         const self = this;
@@ -414,23 +416,50 @@ export const serial = {
             clearInterval(self._keepaliveTimer);
             self._keepaliveTimer = null;
         }
-        // 설정 읽기
-        const interval = config.get('bleKeepalive') ?? 30;
+        const interval = config.get('bleKeepalive') ?? 15;
         if (interval <= 0) return;
 
-        // MSP_STATUS 프레임 (6바이트): $ M < 0 code checksum
-        // MSP_STATUS = 106 (0x6A), checksum = 0x00 ^ 0x6A = 0x6A
+        // 마지막 MSP 수신 시간 기록
+        self._keepaliveLastActivity = Date.now();
+
+        // 수신 데이터가 있을 때마다 활동 시간 갱신
+        const originalOnReceive = self.onReceive.listeners;
+        if (originalOnReceive && originalOnReceive._keepaliveHooked) {
+            // 이미 hook 되어 있으면 건너뜀
+        } else {
+            const hook = function (data) {
+                self._keepaliveLastActivity = Date.now();
+            };
+            // onReceive 리스너 뒤에 hook 추가
+            if (self._bleReceiveHandler) {
+                const origHandler = self._bleReceiveHandler;
+                self._bleReceiveHandler = function (e) {
+                    self._keepaliveLastActivity = Date.now();
+                    origHandler(e);
+                };
+            }
+        }
+
+        // MSP_STATUS 프레임
         const statusFrame = new Uint8Array([0x24, 0x4D, 0x3C, 0x00, 0x6A, 0x6A]).buffer;
 
         self._keepaliveTimer = setInterval(function () {
+            // 백그라운드 체크
+            if (typeof document !== 'undefined' && document.hidden) return;
+
             if (!self.connected || self.connectionType !== 'ble') {
                 clearInterval(self._keepaliveTimer);
                 self._keepaliveTimer = null;
                 return;
             }
-            bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
-                statusFrame, function () {}, function () {});
-        }, interval * 1000);
+
+            const idleMs = Date.now() - self._keepaliveLastActivity;
+            if (idleMs >= interval * 1000) {
+                bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
+                    statusFrame, function () {}, function () {});
+                self._keepaliveLastActivity = Date.now();
+            }
+        }, 1000);
     },
 
     connectSPP: function (deviceAddress, options, callback) {
