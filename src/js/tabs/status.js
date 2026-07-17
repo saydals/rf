@@ -93,14 +93,15 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        MSP.promise(MSPCodes.MSP_STATUS)
-            .then(() => MSP.promise(MSPCodes.MSP_FEATURE_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_ACC_TRIM))
-            .then(() => MSP.promise(MSPCodes.MSP_NAME))
-            .then(() => MSP.promise(MSPCodes.MSP_FLIGHT_STATS))
-            .then(() => MSP.promise(MSPCodes.MSP_RC))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS, data: false },
+            { code: MSPCodes.MSP_FEATURE_CONFIG, data: false },
+            { code: MSPCodes.MSP_MIXER_CONFIG, data: false },
+            { code: MSPCodes.MSP_ACC_TRIM, data: false },
+            { code: MSPCodes.MSP_NAME, data: false },
+            { code: MSPCodes.MSP_FLIGHT_STATS, data: false },
+            { code: MSPCodes.MSP_RC, data: false },
+        ]).then(callback);
     }
 
     function process_html() {
