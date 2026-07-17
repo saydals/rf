@@ -1,3 +1,4 @@
+import * as config from "@/js/config.js";
 import { CONFIGURATOR } from "@/js/configurator.svelte.js";
 import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
@@ -53,6 +54,9 @@ export const serial = {
     connectionType: 'serial', // 'serial' or 'tcp' or 'virtual' or 'ble' or 'spp'
     connectionIP:   '127.0.0.1',
     connectionPort: 5761,
+
+    // BLE keepalive timer
+    _keepaliveTimer: null,
 
     // BLE 전용 상태
     bleDevice:       null,     // 연결된 BLE 디바이스 객체
@@ -346,6 +350,10 @@ export const serial = {
                 bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer,
                     function () {
                         console.log('BLE: exit sent, connection ready');
+
+                        // BLE keepalive start
+                        self._startBleKeepalive();
+
                         if (callback) callback({ connectionId: deviceId });
                     },
                     function () {
@@ -388,6 +396,41 @@ export const serial = {
         self.bleTxCharUUID = null;
         self.bleRxCharUUID = null;
         self.bleMtu = BLE_DEFAULT_MTU;
+
+        // BLE keepalive stop
+        if (self._keepaliveTimer) {
+            clearInterval(self._keepaliveTimer);
+            self._keepaliveTimer = null;
+        }
+    },
+
+    /**
+     * BLE keepalive: 주기적으로 MSP_STATUS 전송하여 BLE 모듈 절전 모드 방지
+     * 간격: config.bleKeepalive (기본 30초), 0이면 사용 안 함
+     */
+    _startBleKeepalive: function () {
+        const self = this;
+        if (self._keepaliveTimer) {
+            clearInterval(self._keepaliveTimer);
+            self._keepaliveTimer = null;
+        }
+        // 설정 읽기
+        const interval = config.get('bleKeepalive') ?? 30;
+        if (interval <= 0) return;
+
+        // MSP_STATUS 프레임 (6바이트): $ M < 0 code checksum
+        // MSP_STATUS = 106 (0x6A), checksum = 0x00 ^ 0x6A = 0x6A
+        const statusFrame = new Uint8Array([0x24, 0x4D, 0x3C, 0x00, 0x6A, 0x6A]).buffer;
+
+        self._keepaliveTimer = setInterval(function () {
+            if (!self.connected || self.connectionType !== 'ble') {
+                clearInterval(self._keepaliveTimer);
+                self._keepaliveTimer = null;
+                return;
+            }
+            bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
+                statusFrame, function () {}, function () {});
+        }, interval * 1000);
     },
 
     connectSPP: function (deviceAddress, options, callback) {

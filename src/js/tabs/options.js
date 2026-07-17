@@ -3,6 +3,7 @@ import * as config from "@/js/config.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
 import { checkForConfiguratorUpdates, setDarkTheme } from "@/js/main.js";
+import { serial } from "@/js/serial.js";
 
 import { TABS } from "./tabs.js";
 
@@ -18,6 +19,7 @@ const tab = {
       this.initAutoConnectConnectionTimeout();
       this.initCordovaForceComputerUI();
       this.initDarkTheme();
+      this.initBleKeepalive();
       this.rememberLastSelectedBoard();
       this.showAdvancedFirmwareOpts();
 
@@ -96,6 +98,19 @@ const tab = {
 
         config.set({ darkTheme: value });
         setDarkTheme(value);
+      });
+  },
+
+  initBleKeepalive() {
+    $("#opt-ble-keepalive")
+      .val(config.get("bleKeepalive") ?? 30)
+      .on("change", function () {
+        const val = parseInt($(this).val());
+        config.set({ bleKeepalive: val });
+        // 연결되어 있으면 타이머 재시작
+        if (typeof serial !== 'undefined' && serial.connected && serial.connectionType === 'ble') {
+          serial._startBleKeepalive();
+        }
       });
   },
 };
