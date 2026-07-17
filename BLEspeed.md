@@ -55,36 +55,27 @@ BLE 연결 시 탭 로딩이 1분 이상 걸리는 현상이 발생했다.
 | 커밋 | 내용 |
 |------|------|
 | `24a2439b` | Options 페이지에 BLE Keepalive Interval 드롭다운 추가 |
-| `fff6f74a` | 유휴 시간 기반으로 변경 + 백그라운드 체크 + 기본 15초 |
+n### Phase 0: 진단과 오해 (2026-07-11 ~ 07-15)
 
----
+| 날짜 | 작업 | 결과 |
+|------|------|------|
+| 07-11 | BLE 테스트용 네이티브 안드로이드 APK 제작 | BLE 자체는 100ms 내 응답 확인 |
+| 07-11 | Betaflight vs Rotorflight 코드 구조 비교 | `_dispatch_message` 외 동일 |
+| 07-12 | `cordova.exec()` 브릿지 overhead 분석 | evaluateJavascript 직통 → **효과 없음** |
+| 07-12 | Betaflight 원본 diff 분석 | **Betaflight도 `_dispatch_message`에 callback dispatch 없음** |
+| 07-13~14 | MTU/ConnectionPriority 실험 | 미미, 원복 |
 
-## 3. 근본 원인 3가지
+### Phase 1: 근본 원인 발견 (2026-07-15 ~ 07-16)
 
-### 원인 1: Promise 누락 (가장 치명적)
+`_dispatch_message` callback dispatch가 없으면 `MSP.promise()`는 절대 resolve되지 않는다.
+Betaflight도 동일한 구조지만, Vue 반응형 데이터 바인딩 덕분에 `listener` 경로(`notify()` → `process_data()`)로
+FC 변수 업데이트 → 자동 UI 갱신이 가능해 탭이 정상 표시된다.
+반면 Rotorflight는 jQuery 기반이라 `load_data(load_html)` 패턴이 Promise 완료에 의존적이라 치명적이었다.
 
-**파일:** `src/js/msp.svelte.js` — `_dispatch_message()`
-
-MSP 응답이 도착해도 Promise를 `resolve()`하지 않아서
-`MSP.promise(...).then(...)`이 영원히 실행되지 않았다.
-탭 로딩 코드는 `.then()`으로 연결되어 있어서 첫 번째 Promise가
-완료되지 않으면 다음 요청으로 진행 불가.
-
-> 발견 경로: BLE 테스트 APK로 MSP 명령 응답 시간 측정 → 
-> 모든 명령이 90ms 내 응답 → 
-> 문제는 앱의 응답 처리 로직 → 
-> Promise resolve 누락 확인
-
-### 원인 2: 무한 재전송
-
-**파일:** `src/js/msp.svelte.js` — `send_message()`
-
-응답 도착 여부를 확인하지 않고 1~2초마다 무한 재전송.
-FC에 중복 요청 쌓임 → 응답 지연 → 더 많은 재전송 악순환.
-
-### 원인 3: MTU 분할 누락
-
-**파일:** `src/js/serial.js` — `bleWrite()` → `fragmentMspFrame()`
+**핵심 커밋:** `4f160d98 fix(ble): improve BLE MSP throughput and reliability`
+- `_dispatch_message`에 callback dispatch 추가 (Promise 완료 + 타이머 해제)
+- 재시도: 랜덤 지터 → 2초 고정, 응답 오면 즉시 중지
+- MTU 분할 전송 도입
 
 MTU 247을 넘는 MSP 프레임을 분할 없이 한 번에 전송.
 BLE 컨트롤러가 데이터를 버리거나 손상시킴.
@@ -129,14 +120,14 @@ FC는 CRC 오류로 응답 불가 → 재전송 유발.
 
 ---
 
-## 6. 잔여 이슈
+n## 6. 남은 이슈
 
 | 이슈 | 상태 |
 |------|------|
-| Status 탭 첫 진입 6초 (vs 1~3초) | 남음. FC 초기화 지연으로 추정 |
-| BLE 유휴 시 절전 모드 진입 | Keepalive로 해결 (기본 15초) |
+| Status 탭 첫 진입 | **해결됨** (keepalive + batchCodes로 3초 내) |
+| BLE 유휴 시 절전 모드 진입 | **해결됨** (Keepalive, 기본 15초 유휴 기반) |
 | PendingIntent lint 경고 3건 | 기능 무관, USB 케이블 연결 시 Android 12+ 크래시 가능 |
-| Capacitor 이관 | 시도했으나 빈 페이지 (의존성 누락), 추후 재시도 가능 |
+| Capacitor 이관 | 시도했으나 빈 페이지 (의존성 누락) |
 
 ---
 
@@ -144,23 +135,22 @@ FC는 CRC 오류로 응답 불가 → 재전송 유발.
 
 ### 진짜 병목 3가지
 
-1. **MSP Promise가 완료되지 않음** ← 복구 후 가장 큰 효과
-2. **응답 무시 무한 재전송** ← 쓸데없는 중복 트래픽
+1. **`_dispatch_message` callback dispatch 누락** ← MSP.promise()가 영원히 resolve 안 됨
+   - Betaflight도 동일한 구조이지만 Vue 반응형으로 인해 문제가 드러나지 않음
+   - Rotorflight는 jQuery 기반이라 `load_data(load_html)` 패턴이 Promise에 의존적이라 치명적
+2. **응답 무시 무한 재전송** ← 쓸데없는 중복 트래픽으로 FC 부하 가중
 3. **MTU 분할 누락** ← 큰 프레임 손실 → 응답 불가
 
-### 모르는 것 (남은 미스터리)
+### 최종 성능
 
-Betaflight와 완전히 동일한 코드 구조인데도 BLE 속도 차이가 발생한 원인은
-끝내 발견하지 못했다. 추정:
-- Capacitor의 WebView/브릿지가 Cordova보다 경량
-- 안드로이드 BLE 연결 파라미터의 미묘한 차이
-- SpeedyBee 펌웨어의 앱 식별 가능성
+| 항목 | 개선 전 | 개선 후 |
+|------|---------|---------|
+| AUX/Mode 탭 | 1분+ | 1~3초 |
+| Status 첫 진입 | 1분 | **3초 내** (keepalive 적용 후) |
+| Status 재진입 | 30~60초 | 1~3초 |
+| 기타 탭 | 30초~1분 | 1~3초 |
+| BLE 응답 자체 | 90ms | 90ms (변화 없음, 처음부터 빠름) |
 
-### 사용자 경험 변화
-
-```
-개선 전: BLE 연결 → 탭 선택 → 1분 대기 → 흰 화면 → 30초 후 데이터 표시
-개선 후: BLE 연결 → 탭 선택 → 3~6초 → 데이터 표시 → (활발히 사용 시 즉시 응답)
          → 15초 유휴 → Keepalive 전송 → 연결 유지
 ```
 
