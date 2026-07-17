@@ -17,7 +17,6 @@ testresults/
 public/fontawesome
 app/
 bundle/
-redist/
 nwjs_cache
 
 # OSX
