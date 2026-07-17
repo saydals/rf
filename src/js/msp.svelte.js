@@ -232,6 +232,20 @@ export const MSP = {
             this.dataView = new DataView(new ArrayBuffer(0));
         }
         this.notify();
+        // Dispatch response to pending callbacks
+        const responseCode = this.code;
+        for (let i = 0; i < this.callbacks.length; i++) {
+            const cb = this.callbacks[i];
+            if (cb && cb.code === responseCode && typeof cb.callback === 'function') {
+                cb.callback(this.dataView);
+                if (cb.timer) {
+                    clearTimeout(cb.timer);
+                    cb.timer = null;
+                }
+                this.callbacks.splice(i, 1);
+                i--;
+            }
+        }
         // Reset variables
         this.message_length_received = 0;
         this.state = 0;
@@ -368,7 +382,7 @@ export const MSP = {
                 return;
             }
 
-            // BLE: 1000~2000ms 랜덤 지터 무한 반복 (setTimeout 체인)
+            // BLE: 2초 안전장치 재전송 (응답 수신 시 콜백 디스패치가 타이머 해제)
             if (serial.connectionType === 'ble') {
                 function trySend() {
                     if (!serial.connected || CONFIGURATOR.cliEngineActive) {
@@ -385,8 +399,7 @@ export const MSP = {
                     }
 
                     serial.send(bufferOut, false);
-                    const jitter = Math.random() * 1000;
-                    obj.timer = setTimeout(trySend, 1000 + jitter);
+                    obj.timer = setTimeout(trySend, 2000);
                 }
                 obj.timer = setTimeout(trySend, 0);
             } else {
@@ -499,16 +512,22 @@ export const MSP = {
                 offset += buf.byteLength;
             }
 
-            // BLE 1000~2000ms 랜덤 지터 무한 반복 (setTimeout 체인)
+            // BLE 2초 안전장치 재전송 (모든 응답 수신 시 자동 중지)
             function batchSend() {
                 if (!serial.connected || CONFIGURATOR.cliEngineActive) return;
+                
+                // 배치에 포함된 코드들의 콜백이 모두 처리되었으면 재전송 중지
+                const hasPending = MSP.callbacks.some(function(cb) {
+                    return batchSeenCodes.has(cb.code);
+                });
+                if (!hasPending) return;
+                
                 serial.send(combined.buffer, function (sendInfo) {
                     if (sendInfo.bytesSent !== combined.byteLength) {
                         console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
                     }
                 });
-                const jitter = Math.random() * 1000;
-                setTimeout(batchSend, 1000 + jitter);
+                setTimeout(batchSend, 2000);
             }
             setTimeout(batchSend, 0);
         }
