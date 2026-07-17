@@ -65,6 +65,25 @@ HTML 로딩이 다시 Promise 완료에 의존하게 되었다.
 이로 인해 `_dispatch_message` callback dispatch 누락이
 치명적인 버그로 드러났다.
 
+### 2.2 회귀(Regression) 확정: 커밋 `effa7888` (07-13)
+
+```
+commit effa7888
+Date:   Mon Jul 13 19:49:45 2026 +0900
+    BLE 연결 시 exit 전송 제거 + 탭 강제 초기값 로딩 원복
+
+    - 14개 탭 강제 초기값 로딩 원복:
+      load_html() 즉시 + MSP 백그라운드 → load_data(load_html)
+```
+
+`2fe2a0ef`(07-11)에서 도입된 비동기 즉시 렌더링(`load_html()` + `load_data(data_to_form)`)을
+3일 만에 다시 `load_data(load_html)`로 되돌렸다.
+"캐시된 데이터가 아닌 최신 MSP 데이터를 보장하기 위해" 의도된 변경이었으나,
+`_dispatch_message` callback dispatch 누락과 겹쳐 최악의 결과를 만들었다.
+- 비동기 즉시 렌더링이었다면 `callback dispatch` 누락이 있어도 HTML은 보이고 데이터만 늦게 채워졌을 것
+- `load_data(load_html)`로 결합되면서 HTML 자체가 Promise를 기다리게 되어 완전 백지 화면 + 1분 지연 발생
+- 즉 **두 문제가 하나로 겹쳐야** 완전 백지 화면이 나왔음
+
 `send_batch`의 5초 `Promise.race` 타임아웃 시:
 - `allCallback([])`이 호출되어 빈 배열이 콜백에 전달됨
 - 하지만 `data_to_form()`은 이 배열을 무시하고 FC `$state`를 직접 읽음
