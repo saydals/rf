@@ -17,7 +17,7 @@ BLE 연결 시 탭 로딩이 1분 이상 걸리는 현상 개선.
 
 ## 2. 발견된 근본 원인 3가지
 
-### 2.1 `_dispatch_message` callback dispatch 누락 (가장 치명적)
+### 2.1 `_dispatch_message` callback dispatch 누락 + 회귀 버그 (가장 치명적)
 
 **파일:** `src/js/msp.svelte.js` (Svelte 기반, jQuery/Vue 아님)
 
@@ -43,14 +43,32 @@ for (let i = 0; i < this.callbacks.length; i++) {
 ```
 
 왜 예전에도 간신히 동작했는가:
-- Svelte의 반응형 상태(`$state`, `$derived`)는 `notify()` → `mspHelper.process_data()`
-  경로로 FC 변수가 업데이트되면 UI가 자동 갱신된다.
-- 하지만 `load_data(load_html)` 패턴은 HTML 로딩 자체가 `.then(callback)`에
-  의존적이어서 Promise 완료가 필수였다.
-- `MSPShelper.process_data` 내부에 별도의 `dataHandler.callbacks` 배열이 존재하지만
-  이것은 `MSP_MULTIPLE_MSP` 배치용이며, `MSP.promise()`의 `callbacks` 배열과 다르다.
-- `batchSend`에 있던 5초 `Promise.race` 타임아웃이 유일한 fallback이었다.
-  (7개 직렬이면 35초 + 재시도 = ~1분)
+
+커밋 `2fe2a0ef`(07-11)에서 Status 탭을 포함한 6개 탭이
+"비동기 로드" 로 변경되었다:
+```diff
+-    load_data(load_html);      // HTML 로딩이 Promise 완료를 기다림
++    load_html();               // HTML 즉시 렌더링 (항상)
++    load_data(function () {    // MSP 데이터는 백그라운드 채우기
++        data_to_form();
++    });
+```
+
+이 설계에서는 HTML이 항상 즉시 로딩되므로,
+Promise가 미완료되어도 빈 페이지는 절대 발생하지 않는다.
+데이터는 `notify()` → `mspHelper.process_data()` → Svelte `$state` 경로로
+이미 FC 변수에 저장되어 있고, UI는 이 반응형 상태를 직접 참조한다.
+
+그러나 이후 알 수 없는 시점에 이 변경이 **회귀(regression)** 되어
+`load_data(load_html)` 패턴으로 되돌아갔고,
+HTML 로딩이 다시 Promise 완료에 의존하게 되었다.
+이로 인해 `_dispatch_message` callback dispatch 누락이
+치명적인 버그로 드러났다.
+
+`send_batch`의 5초 `Promise.race` 타임아웃 시:
+- `allCallback([])`이 호출되어 빈 배열이 콜백에 전달됨
+- 하지만 `data_to_form()`은 이 배열을 무시하고 FC `$state`를 직접 읽음
+- 즉 **(A) 설명이 정답: 콜백 인자는 무시되고, UI는 반응형 상태를 참조한다**
 
 ### 2.2 응답 무시 무한 재전송
 
