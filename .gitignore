@@ -34,3 +34,8 @@ nbproject/
 # Eclipse
 .project
 .settings/
+
+# Signing / keystore (not tracked, keep local only)
+*.jks
+*.keystore
+release-signing.properties

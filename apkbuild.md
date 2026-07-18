@@ -111,6 +111,37 @@ rfconfigurator/
 - APK 버전은 `package.json`의 `version` 필드로 관리됩니다.
 - 릴리즈 빌드는 `cordova/build.json`의 keystore 정보로 서명됩니다.
 
+## 서명 키스토어 관리 (주의)
+
+릴리즈 APK는 `cordova/release.jks` 키스토어로 서명됩니다. 서명 관련 설정은 **의도적으로 git 추적에서 제외**되어 있으므로, git status에 아래와 같이 표시되는 것은 **정상**이며 에러가 아닙니다.
+
+- `cordova/release.jks` : untracked / deleted 로 표시됨 (`.gitignore`의 `*.jks` 규칙)
+- `cordova/build.json` : 서명 비밀번호가 평문으로 들어있음 (릴리즈 빌드 시 Cordova가 사용)
+
+### 현재 서명 정보
+
+| 항목 | 값 |
+| --- | --- |
+| 키스토어 파일 | `cordova/release.jks` (복사본: `app/android/release.jks`) |
+| 키 별칭 (alias) | `rotorflight` |
+| 키스토어 비밀번호 / 키 비밀번호 | `rotoflgihtfork` |
+| 인증서 SHA-256 | `06:6D:ED:DB:42:E8:35:74:D6:2F:BC:0C:BE:92:84:D5:CB:01:91:74:40:BE:74:54:BB:5A:8D:46:4A:A4:4F:98` |
+
+> ⚠️ 비밀번호를 변경해야 할 경우 반드시 **두 키스토어(`cordova/release.jks`, `app/android/release.jks`) 모두**를
+> `keytool -storepasswd` + `-keypasswd` 로 동일하게 바꾸고, `cordova/build.json`(및 `app/android/build.json`)의
+> `storePassword`/`password` 도 함께 갱신해야 합니다. 한쪽만 바뀌면 서명 불일치로 빌드가 실패합니다.
+> 키스토어 파일은 git에 올라가지 않으므로, 분실 시 해당 APK는 더 이상 업데이트할 수 없습니다 (새 키로 재배포 필요).
+
+### 서명 변경 절차 (요약)
+
+```bash
+cd /home/betaflight/rfconfigurator/cordova
+keytool -storepasswd -keystore release.jks -storetype JKS   # store 비밀번호 변경
+keytool -keypasswd -alias rotorflight -keystore release.jks -storetype JKS  # key 비밀번호 변경
+# app/android/release.jks 도 동일하게 변경
+# cordova/build.json 의 storePassword / password 갱신
+```
+
 
 
 이 문서에서 가장 중요한 사항으로 코드 수정 중 수시로 아래 내용을 기억해내고 따른다.

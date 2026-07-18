@@ -2,9 +2,9 @@
     "android": {
         "release": {
             "keystore": "release.jks",
-            "storePassword": "rotorflight",
+            "storePassword": "rotoflgihtfork",
             "alias": "rotorflight",
-            "password" : "rotorflight",
+            "password" : "rotoflgihtfork",
             "packageType": "apk"
         }
     }
