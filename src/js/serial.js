@@ -340,11 +340,16 @@ export const serial = {
                 self.bleMtu         = peripheral.mtu || BLE_REQUESTED_MTU;
 
                 console.log(`BLE: connected, MTU=${self.bleMtu}, svc=${self.bleServiceUUID}`);
-                // Revision Patch 3: MTU 상태 로그 개선
+                // MTU 상태 로그: 실제 협상된 MTU와 성능 영향 표시
+                const mtuPayload = self.bleMtu - 3; // ATT 헤더 제외 실제 데이터 전송량
                 if (self.bleMtu < BLE_REQUESTED_MTU) {
-                    GUI.log(`BLE connected (MTU ${self.bleMtu} WARNING - expected 247, performance degraded)`);
+                    GUI.log(`BLE connected (MTU ${self.bleMtu}, payload ${mtuPayload}B — expected ${BLE_REQUESTED_MTU}, performance degraded)`);
+                } else if (self.bleMtu >= 500) {
+                    GUI.log(`BLE connected (MTU ${self.bleMtu}, payload ${mtuPayload}B — high throughput, MSP V2 bulk transfers supported)`);
+                } else if (self.bleMtu >= 247) {
+                    GUI.log(`BLE connected (MTU ${self.bleMtu}, payload ${mtuPayload}B — standard high speed)`);
                 } else {
-                    GUI.log(`BLE connected (MTU ${self.bleMtu}, HIGH priority)`);
+                    GUI.log(`BLE connected (MTU ${self.bleMtu}, payload ${mtuPayload}B — low speed, fragmentation may impact latency)`);
                 }
 
                 const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]);
@@ -749,8 +754,46 @@ export const serial = {
                 const mtu = self.bleMtu || BLE_REQUESTED_MTU;
                 const fragments = fragmentMspFrame(_data, mtu);
                 const totalBytes = _data.byteLength;
+                const payloadSize = mtu - 3; // ATT 헤더(3바이트) 제외한 실제 payload 크기
                 let fragmentIndex = 0;
                 let bytesSentSoFar = 0;
+
+                // 단일 프래그먼트면 즉시 전송 (딜레이 없음)
+                if (fragments.length === 1) {
+                    bleWrite(self.connectionId, self.bleServiceUUID, self.bleTxCharUUID,
+                        fragments[0],
+                        function () {
+                            self.bytesSent += totalBytes;
+                            if (_callback) {
+                                _callback({ bytesSent: totalBytes });
+                            }
+                            self.outputBuffer.shift();
+                            if (self.outputBuffer.length) {
+                                _send();
+                            } else {
+                                self.transmitting = false;
+                            }
+                        },
+                        function (error) {
+                            console.error('BLE send error:', error);
+                            if (_callback) {
+                                _callback({ bytesSent: 0, error: error });
+                            }
+                            self.outputBuffer.shift();
+                            if (self.outputBuffer.length) {
+                                _send();
+                            } else {
+                                self.transmitting = false;
+                            }
+                        }
+                    );
+                    return;
+                }
+
+                // 다중 프래그먼트: Nordic GATT Write 큐가 순차 처리하므로
+                // 인위적 딜레이 없이 연속 전송 (단, 버퍼 오버플로우 방지를 위해
+                // 프래그먼트가 많을 때만 최소 간격 적용)
+                const fragmentDelay = (fragments.length > 4) ? 5 : 0;
 
                 function sendNextFragment() {
                     if (fragmentIndex >= fragments.length) {
@@ -774,8 +817,11 @@ export const serial = {
                         function () {
                             bytesSentSoFar += fragment.byteLength;
                             fragmentIndex++;
-                            // 다음 fragment 전송 (10ms 간격)
-                            setTimeout(sendNextFragment, 10);
+                            if (fragmentDelay > 0) {
+                                setTimeout(sendNextFragment, fragmentDelay);
+                            } else {
+                                sendNextFragment();
+                            }
                         },
                         function (error) {
                             console.error('BLE fragment send error:', error);
