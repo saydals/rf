@@ -1,0 +1,44 @@
+# node.js npm related
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Configurator Build process
+cache/
+apps/
+dist/
+dist_cordova/
+debug/
+release/
+testresults/
+.eslintcache
+public/fontawesome
+app/
+bundle/
+nwjs_cache
+
+# OSX
+.DS_store
+
+# artefacts for Visual Studio Code
+/.vscode/
+
+# NetBeans
+nbproject/
+
+# IntelliJ
+.idea
+
+# Eclipse
+.project
+.settings/
+
+# Signing / keystore (not tracked, keep local only)
+*.jks
+*.keystore
+release-signing.properties
+
+# Kilo agent state (local only)
+.kilo/

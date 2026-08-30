@@ -1,0 +1,60 @@
+{
+  "name": "[INJECTED_BY_GULPFILE]",
+  "displayName": "Rotorflight Configurator",
+  "version": "[INJECTED_BY_GULPFILE]",
+  "description": "[INJECTED_BY_GULPFILE]",
+  "main": "index.js",
+  "scripts": {},
+  "author": "[INJECTED_BY_GULPFILE]",
+  "license": "[INJECTED_BY_GULPFILE]",
+  "dependencies": {
+    "bf-cordova-open-native-settings": "^2.0.4",
+    "bf-cordova-plugin-appavailability": "^1.0.3",
+    "bf-cordova-plugin-chrome-apps-usb": "^2.0.1",
+    "bf-cordovarduino": "^1.0.0",
+    "cordova": "^12.0.0",
+    "cordova-android": "^14.0.1",
+    "cordova-clipboard": "^1.3.0",
+    "cordova-plugin-chrome-apps-common": "^1.0.7",
+    "cordova-plugin-chrome-apps-runtime": "^2.0.0",
+    "cordova-plugin-chrome-apps-storage": "^1.0.4",
+    "cordova-plugin-dialogs": "^2.0.2",
+    "cordova-plugin-file": "^8.1.0",
+    "cordova-plugin-filechooser": "^1.2.0",
+    "cordova-plugin-filepath": "^1.6.0",
+    "cordova-plugin-market": "^1.2.0",
+    "cordova-plugin-permission": "^0.1.0",
+    "cordova-plugin-screen-orientation": "^3.0.4",
+    "cordova-plugin-theme-detection": "^1.3.0",
+    "cordova-plugin-usb-event": "^1.0.2",
+    "es6-promise-plugin": "^4.2.2",
+    "cordova-plugin-rfc-nordic-ble": "file:plugins/cordova-plugin-rfc-nordic-ble",
+    "cordova-plugin-bluetooth-serial": "file:plugins/cordova-plugin-bluetooth-serial"
+  },
+  "cordova": {
+    "platforms": [
+      "android"
+    ],
+    "plugins": {
+      "bf-cordova-open-native-settings": {},
+      "bf-cordova-plugin-appavailability": {},
+      "bf-cordova-plugin-chrome-apps-usb": {},
+      "bf-cordovarduino": {},
+      "cordova-clipboard": {},
+      "cordova-plugin-chrome-apps-common": {},
+      "cordova-plugin-chrome-apps-runtime": {},
+      "cordova-plugin-chrome-apps-storage": {},
+      "cordova-plugin-dialogs": {},
+      "cordova-plugin-file": {},
+      "cordova-plugin-filechooser": {},
+      "cordova-plugin-filepath": {},
+      "cordova-plugin-market": {},
+      "cordova-plugin-permission": {},
+      "cordova-plugin-screen-orientation": {},
+      "cordova-plugin-theme-detection": {},
+      "cordova-plugin-usb-event": {},
+      "cordova-plugin-rfc-nordic-ble": {},
+      "cordova-plugin-bluetooth-serial": {}
+    }
+  }
+}

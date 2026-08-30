@@ -1,0 +1,13 @@
+allowBuilds:
+  '@fortawesome/fontawesome-free': false
+  '@parcel/watcher': true
+  es5-ext: false
+  fs-xattr: true
+  fsevents: true
+  macos-alias: true
+  nw-builder: false
+
+overrides:
+  fs-xattr: 0.4.0
+  macos-alias: 0.2.12
+  nan: 2.23.0

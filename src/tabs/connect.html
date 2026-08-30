@@ -1,0 +1,109 @@
+<div class="tab-connect">
+    <div class="connect-content">
+
+        <!-- ============ TOP BAR: sensors + firmware + expert ============ -->
+        <section class="connect-topbar">
+            <div id="sensor-status-tab" class="sensor_state">
+                <ul>
+                    <li class="gyro" i18n_title="sensorStatusGyro">
+                        <div class="gyroicon" i18n="sensorStatusGyroShort"></div>
+                    </li>
+                    <li class="accel" i18n_title="sensorStatusAccel">
+                        <div class="accicon" i18n="sensorStatusAccelShort"></div>
+                    </li>
+                    <li class="mag" i18n_title="sensorStatusMag">
+                        <div class="magicon" i18n="sensorStatusMagShort"></div>
+                    </li>
+                    <li class="baro" i18n_title="sensorStatusBaro">
+                        <div class="baroicon" i18n="sensorStatusBaroShort"></div>
+                    </li>
+                    <li class="gps" i18n_title="sensorStatusGPS">
+                        <div class="gpsicon" i18n="sensorStatusGPSShort"></div>
+                    </li>
+                </ul>
+            </div>
+            <div class="connect-topbar-actions">
+                <a href="#" id="connect-theme-btn" class="connect-icon-btn" i18n_title="connectThemeToggle">
+                    <em class="fas fa-moon" id="connect-theme-icon"></em>
+                    <span i18n="connectThemeShort">THEME</span>
+                </a>
+                <a href="#" id="connect-exit-btn" class="connect-icon-btn" i18n_title="connectExit">
+                    <em class="fas fa-power-off"></em>
+                    <span i18n="connectExitShort">EXIT</span>
+                </a>
+            </div>
+        </section>
+
+        <!-- ============ CURRENT LINK ============ -->
+        <section class="connect-linkbar" id="connect-linkbar">
+            <span class="link-dot" id="connect-link-dot"></span>
+            <span class="link-text" id="connect-link-text"></span>
+            <a href="#" class="device-btn" id="connect-disconnect-btn">
+                <span i18n="connect">Connect</span>
+            </a>
+        </section>
+
+        <!-- ============ USB SERIAL ============ -->
+        <section class="connect-section" id="connect-section-serial">
+            <div class="connect-section-header">
+                <span class="section-dot" id="serial-dot"></span>
+                <h3 i18n="connectSectionSerial">USB Serial</h3>
+                <span class="section-state" id="serial-state"></span>
+                <div class="section-baud dropdown dropdown-dark">
+                    <select id="connect-baud" class="dropdown-select" i18n_title="firmwareFlasherBaudRate"></select>
+                </div>
+                <a href="#" id="serial-scan-btn" class="section-scan-btn">
+                    <em class="fas fa-sync"></em>
+                    <span i18n="connectScan">Scan</span>
+                </a>
+            </div>
+            <ul class="device-list" id="serial-device-list"></ul>
+        </section>
+
+        <!-- ============ WIRELESS CONNECTIONS ============ -->
+        <div class="connect-wireless-grid">
+        <!-- ============ BLUETOOTH SPP ============ -->
+        <section class="connect-section" id="connect-section-spp">
+            <div class="connect-section-header">
+                <span class="section-dot" id="spp-dot"></span>
+                <h3 i18n="connectSectionSpp">Bluetooth SPP</h3>
+                <span class="section-state" id="spp-state"></span>
+                <a href="#" id="spp-scan-btn" class="section-scan-btn">
+                    <em class="fas fa-sync"></em>
+                    <span i18n="connectScan">Scan</span>
+                </a>
+            </div>
+            <ul class="device-list" id="spp-device-list"></ul>
+        </section>
+
+        <!-- ============ BLUETOOTH LE ============ -->
+        <section class="connect-section" id="connect-section-ble">
+            <div class="connect-section-header">
+                <span class="section-dot" id="ble-dot"></span>
+                <h3 i18n="connectSectionBle">Bluetooth LE</h3>
+                <span class="section-state" id="ble-state"></span>
+                <a href="#" id="ble-scan-btn" class="section-scan-btn">
+                    <em class="fas fa-sync"></em>
+                    <span i18n="connectScan">Scan</span>
+                </a>
+            </div>
+            <ul class="device-list" id="ble-device-list"></ul>
+        </section>
+        </div>
+
+        <!-- ============ LOG ============ -->
+        <section class="connect-section connect-log-section">
+            <div class="connect-section-header">
+                <h3 i18n="connectLog">Log</h3>
+                <a href="#" id="connect-log-toggle" class="section-scan-btn">
+                    <em class="fas fa-angle-down"></em>
+                    <span i18n="logActionShow"></span>
+                </a>
+            </div>
+            <div id="log-tab" class="log">
+                <div class="wrapper"></div>
+            </div>
+        </section>
+
+    </div>
+</div>

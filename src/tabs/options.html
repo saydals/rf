@@ -1,0 +1,148 @@
+<div class="tab-options">
+  <div class="content_wrapper">
+    <div class="gui_box">
+      <div class="gui_box_titlebar">
+        <div class="spacer_box_title" i18n="tabOptions"></div>
+      </div>
+      <div class="spacer field-container">
+        <div class="field">
+          <div>
+            <input
+              id="opt-check-unstable-versions"
+              type="checkbox"
+              class="toggle"
+            />
+          </div>
+          <label
+            for="opt-check-unstable-versions"
+            i18n="checkForConfiguratorUnstableVersions"
+          ></label>
+        </div>
+        <div class="field">
+          <div>
+            <input id="opt-remember-last-tab" type="checkbox" class="toggle" />
+          </div>
+          <label for="opt-remember-last-tab" i18n="rememberLastTab"></label>
+        </div>
+        <div class="field">
+          <div>
+            <input
+              id="opt-remember-last-board"
+              type="checkbox"
+              class="toggle"
+            />
+          </div>
+          <label
+            for="opt-remember-last-board"
+            i18n="rememberLastSelectedBoard"
+          ></label>
+        </div>
+        <div class="field">
+          <div>
+            <input
+              id="opt-show-advanced-firmware-opts"
+              type="checkbox"
+              class="toggle"
+            />
+          </div>
+          <label
+            for="opt-show-advanced-firmware-opts"
+            i18n="options.show_advanced_firmware_opts.label"
+          ></label>
+        </div>
+        <div class="field">
+          <select id="opt-connection-timeout">
+            <option value="100">100</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+            <option value="1500">1500</option>
+            <option value="2500">2500</option>
+            <option value="5000">5000</option>
+          </select>
+          <label for="opt-connection-timeout" i18n="connectionTimeout"></label>
+        </div>
+        <div class="field">
+          <div>
+            <input
+              id="opt-cordova-force-computer-ui"
+              type="checkbox"
+              class="toggle"
+            />
+          </div>
+          <label
+            for="opt-cordova-force-computer-ui"
+            i18n="cordovaForceComputerUI"
+          ></label>
+        </div>
+        <div class="field">
+          <select id="opt-dark-theme">
+            <option value="0" i18n="on"></option>
+            <option value="1" i18n="off"></option>
+            <option value="2" i18n="auto"></option>
+          </select>
+          <label for="opt-dark-theme" i18n="darkTheme"></label>
+        </div>
+        <div class="field">
+          <select id="opt-ble-keepalive">
+            <option value="0" i18n="off"></option>
+            <option value="10">10s</option>
+            <option value="15" selected>15s</option>
+            <option value="20">20s</option>
+            <option value="30">30s</option>
+            <option value="60">60s</option>
+          </select>
+          <label for="opt-ble-keepalive">BLE Keepalive Interval</label>
+        </div>
+        <div class="field">
+          <select id="opt-ble-retry-interval">
+            <option value="1">1s</option>
+            <option value="2" selected>2s</option>
+            <option value="3">3s</option>
+            <option value="4">4s</option>
+            <option value="5">5s</option>
+            <option value="6">6s</option>
+            <option value="7">7s</option>
+            <option value="8">8s</option>
+            <option value="9">9s</option>
+          </select>
+          <label for="opt-ble-retry-interval">BLE 재전송 요청 간격</label>
+        </div>
+        <div class="field">
+          <select id="opt-ble-request-timeout">
+            <option value="5">5s</option>
+            <option value="10">10s</option>
+            <option value="15">15s</option>
+            <option value="20" selected>20s</option>
+            <option value="30">30s</option>
+            <option value="45">45s</option>
+            <option value="60">60s</option>
+          </select>
+          <label for="opt-ble-request-timeout">MSP 응답 타임아웃</label>
+        </div>
+        <div class="field">
+          <div>
+            <input id="opt-expert-mode" type="checkbox" class="toggle" />
+          </div>
+          <label for="opt-expert-mode" i18n="expertMode"></label>
+        </div>
+        <div class="field">
+          <div>
+            <input
+              id="opt-allow-vertical-view"
+              type="checkbox"
+              class="toggle"
+            />
+          </div>
+          <label
+            for="opt-allow-vertical-view"
+            i18n="options.allowVerticalView.label"
+          ></label>
+        </div>
+        <div class="show-tabs-box field">
+          <div class="show-tabs-title" i18n="showConnectedTabsTitle"></div>
+          <div class="show-tabs-grid" id="hide-connected-tabs-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

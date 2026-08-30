@@ -1,0 +1,64 @@
+.tab-options .field-container {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 0 12px;
+}
+
+.tab-options .field {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  min-height: 28px;
+}
+
+.tab-options select {
+  background: var(--boxBackground);
+  color: var(--defaultText);
+  border: 1px solid var(--subtleAccent);
+  border-radius: 2px;
+  width: 100%;
+}
+
+.tab-options .show-tabs-box {
+  grid-column: 1 / -1;
+  display: block;
+  border: 1px solid var(--subtleAccent);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--alternativeBackground);
+  margin: 8px 0;
+}
+
+.tab-options .show-tabs-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 10px;
+  color: var(--defaultText);
+}
+
+.tab-options .show-tabs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 14px;
+}
+
+.tab-options .show-tabs-grid .field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  grid-column: auto;
+}
+
+.tab-options .show-tabs-grid .field > div:first-child {
+  display: flex;
+  align-items: center;
+}
+
+.tab-options .show-tabs-grid .field label {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

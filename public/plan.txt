@@ -1,0 +1,844 @@
+아래는 BLE 코드 경로에서 발견된 버그입니다. **B1이 가장 치명적**이며, 이것만 고쳐도 증상 A·C·D의 대부분이 해결됩니다. 나머지는 보조 원인으로, BLE 안정성을 위해 함께 수정해야 합니다.
+
+---
+
+### B1 (★치명적) — BLE RX가 MSP 재조립기를 강제 통과하여 raw CLI 텍스트를 전량 폐기
+
+**위치**: `src/js/serial.js:258-289` + `src/js/ble_central.js:234-276`
+
+**문제 코드**:
+```js
+// src/js/serial.js (connectBLE)
+self.bleRxBuffer = createMspReassembler(function (frame) {
+    // ★ 이 콜백은 "완전한 MSP 프레임"일 때만 호출됨
+    for (let i = 0; i < self.onReceive.listeners.length; i++) {
+        self.onReceive.listeners[i]({
+            data: frame,
+            connectionType: 'ble',
+        });
+    }
+});
+
+self._bleReceiveHandler = function (e) {
+    const data = e.detail;
+    if (data && data.byteLength > 0) {
+        if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+        // ★ 모든 BLE 수신 바이트가 재조립기로 강제 전달
+    }
+};
+```
+
+```js
+// src/js/ble_central.js (_extractFrames)
+while (buffer.length >= 6) {
+    if (buffer[0] !== 0x24) {           // 0x24 = '$'
+        buffer = buffer.slice(1);       // ★ '$' 아니면 1바이트 폐기
+        continue;
+    }
+    const type = buffer[1];
+    if (type !== 0x4D && type !== 0x58) {  // 'M' 또는 'X'가 아니면
+        buffer = buffer.slice(1);       // ★ 폐기
+        continue;
+    }
+    // ... 완전한 MSP 프레임인 경우에만 onCompleteFrame(frame) 호출 ...
+}
+```
+
+**왜 문제인가**:
+- FC의 CLI 출력(`#`, `Entering CLI Mode`, `dump` 결과 등)은 **raw ASCII**입니다.
+- `$M` 또는 `$X`로 시작하지 않으므로, 재조립기가 **바이트 단위로 전량 폐기**합니다.
+- `cliEngine.readSerial()`에는 절대 도달하지 못합니다.
+- 결과: CLI 화면에 아무것도 안 보임. `status`, `version` 응답이 안 보임.
+- `dump`의 일부가 보이는 이유: `dump` 출력에 우연히 `$M` 또는 `$X` 시퀀스가 포함되거나, BLE 청크 경계에 걸쳐 일부 바이트가 재조립기를 통과하기 때문.
+
+**이것이 증상 A, B, C, D의 가장 큰 원인**입니다.
+
+---
+
+### B2 (🔴치명적) — CLI 진입 폴링에 타임아웃이 없어 영구 hang
+
+**위치**: `src/js/tabs/cli.js:183-200`
+
+**문제 코드**:
+```js
+const waitForValidCliEngine = setInterval(() => {
+    if (CONFIGURATOR.cliEngineValid) {    // ★ BLE에서는 영원히 false
+        clearInterval(waitForValidCliEngine);
+        GUI.timeout_add('enter_cli', () => resolve(), 500);
+    }
+}, 500);
+```
+
+**왜 문제인가**:
+- `cliEngineValid`가 `true`가 되려면 웰컴 배너(문자열 "CLI" 포함)가 `cliEngine.readSerial()`에 도달해야 함.
+- BLE에서는 웰컴 배너가 B1로 인해 폐기되므로, `cliEngineValid`가 **영원히 `false`**.
+- `setInterval`이 500ms마다 영원히 폴링 → 메모리 누수 + 사용자 경험 악화.
+- 사용자는 "화면이 멈췄다"고 느낌 (실제로는 JS가 계속 동작하지만 UI가 갱신 안 됨).
+
+**B1만 고치면 이것도 자동 해결**되지만, 안전망으로 타임아웃을 추가해야 함 (BLE 일시적 끊김, BLE 브릿지 펌웨어 버그 등 다른 이유로 웰컴 배너가 안 올 수도 있음).
+
+---
+
+### B3 (🟠높음) — MTU 기본값 불일치로 247B 청크 생성 → BLE write 실패 가능
+
+**위치**: `src/js/serial.js:309` vs `src/js/ble_central.js:120`
+
+**문제 코드**:
+```js
+// src/js/serial.js (connectBLE)
+self.bleMtu = peripheral.mtu || BLE_REQUESTED_MTU;   // ★ 247 (낙관)
+
+// src/js/ble_central.js (bleConnect)
+const negotiatedMtu = result.mtu || BLE_DEFAULT_MTU;  // ★ 23 (보수)
+```
+
+**왜 문제인가**:
+- Nordic 네이티브 플러그인이 `result.mtu`를 안 채우는 경우, `serial.js`는 247로 가정.
+- 실제 BLE 링크 MTU가 23이라면, `fragmentMspFrame`이 244B (247-3) 청크를 생성.
+- 23B MTU 링크에서 244B write는 **BLE 브릿지가 거부하거나 연결이 끊길 수 있음**.
+- `dump` 같은 대량 출력은 아니더라도, MSP 응답(예: `MSP_BOXNAMES`)이 244B 초과 시 실패.
+
+**참고**: 사용자의 증상에서는 `status`, `version`이 안 보이므로 B1이 주원인이지만, MTU가 잘못 설정되면 BLE 연결 자체가 불안정해져 추가 디버깅이 어려워짐. 반드시 같이 수정.
+
+---
+
+### B4 (🟠높음) — BLE `send` 분기에 `outputBuffer` overflow 보호 누락
+
+**위치**: `src/js/serial.js:520-563` (BLE 분기) vs `src/js/serial.js:594-601` (serial/TCP 분기)
+
+**문제 코드**:
+```js
+// serial.js send() - serial/TCP 분기에는 보호 있음
+if (self.outputBuffer.length > 100) {
+    while (self.outputBuffer.length > 100) self.outputBuffer.pop();
+    console.log(`send buffer overflowing, dropped: ${counter}`);
+}
+
+// BLE 분기에는 이 보호가 없음
+if (self.connectionType === 'ble') {
+    const fragments = fragmentMspFrame(_data, self.bleMtu);
+    function sendNextFragment() { ... }
+    sendNextFragment();
+    // ★ overflow 보호 없음
+}
+```
+
+**왜 문제인가**:
+- BLE는 전송 속도가 USB보다 느림 (MTU 247 기준 이론상 ~100KB/s, 실제로는 20-50KB/s).
+- 사용자가 CLI 명령을 빠르게 연속 입력하거나, `dump all` 후 추가 명령을 넣으면 `outputBuffer`가 100을 넘기 쉬움.
+- BLE 분기에는 overflow 보호가 없으므로 큐가 무한 증식 → 메모리 사용량 증가 + 지연 악화.
+- 결국 WebView가 느려지거나 OOM으로 죽을 수 있음.
+
+---
+
+### B5 (🟡중간) — 재조립기가 non-MSP 바이트를 영구 삭제하여 동기화 어긋 시 복구 불가
+
+**위치**: `src/js/ble_central.js:247-272`
+
+**문제 코드**: (B1과 동일한 `_extractFrames`)
+
+**왜 문제인가**:
+- `buffer = buffer.slice(1)`는 non-MSP 바이트를 **영구 삭제**합니다.
+- MSP 모드라도 FC가 혼합 출력(예: 부팅 메시지 + MSP 프레임)을 내보내면, `$M` 앞의 바이트들이 증발.
+- Betaflight의 `MSP.read` 스트림 파서는 non-MSP 바이트를 "skip하되 버퍼를 잃지 않는" 방식이라 복구 가능.
+- B1 수정(재조립기 bypass)을 하면 자연히 해결되지만, MSP 모드에서도 여전히 같은 문제가 남아있을 수 있음.
+
+---
+
+### B6 (🟡중간) — 연결 직후 `exit\r\n` 강제 전송이 CLI 진입 의도와 충돌
+
+**위치**: `src/js/serial.js:319-328`
+
+**문제 코드**:
+```js
+const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]); // "exit\r\n"
+bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer, ...);
+// ★ 연결 즉시 exit 강제 전송
+```
+
+**왜 문제인가**:
+- BLE = MSP 전용이라는 설계 의도의 흔적입니다.
+- 사용자가 CLI 탭을 열면 `enterCliMode`가 `#`를 보내지만, 연결 시점의 `exit` 잔향이 FC 상태를 불확정하게 만듦.
+- 특히 재연결 시나리오에서 이전 세션이 CLI에 남아있을 가능성을 처리하려는 의도로 보이나, CLI 탭 진입 시에는 미전송되어야 함.
+
+---
+
+### B7 (🟢낮음) — BLE `onReceiveError` 리스너가 저장만 되고 발화시키는 코드 없음
+
+**위치**: `src/js/serial.js:650-682`
+
+**문제**: `disconnected` 외의 BLE 에러가 무음 누락됨. 디버깅 시 혼란 가중.
+
+---
+
+### B8 (🟢낮음) — overflow 시 `pop()`이 가장 최근 명령을 버림 (serial/TCP 분기)
+
+**위치**: `src/js/serial.js:594-601` (serial/TCP 전용, BLE는 B4로 별도 처리 필요)
+
+**문제**: `shift()`(오래된 것)가 아니라 `pop()`(최신)이므로 "뒷부분 설정이 통째로 누락"됨. BLE에는 해당 없지만, BLE 분기에도 동일 패턴으로 overflow 보호를 추가할 때 `shift()`를 쓰는 것이 더 안전.
+
+---
+
+## 5. 조사 단계 (코드 수정 전 반드시 수행)
+
+> **원칙**: 디버그 로그를 먼저 붙이고, 실제 BLE 패킷이 어디서 사라지는지 눈으로 확인한 뒤 수정하세요. 추측으로 수정하지 마세요.
+
+### 5.1 단계 1: BLE 네이티브 → JS 경로 확인
+
+`adb logcat`으로 NordicBlePlugin 로그 확인:
+```bash
+adb logcat -s "NordicBlePlugin:V" "chromium:V"
+```
+- `handleNotification` 로그가 찍히는가? → BLE 데이터가 네이티브에서 JS로 넘어오는지 확인
+- `dataReceived` 이벤트 발생 여부
+
+**기대 결과**: BLE 데이터는 네이티브에서 JS까지 정상적으로 도달해야 함. 여기서 끊기면 네이티브 플러그인 문제 (이 작업지시서 범위 밖).
+
+### 5.2 단계 2: `_bleReceiveHandler` 도달 여부
+
+`src/js/serial.js`의 `_bleReceiveHandler`에 로그 추가:
+
+```js
+self._bleReceiveHandler = function (e) {
+    const data = e.detail;
+    console.log('[BLE RX DEBUG] _bleReceiveHandler', {
+        byteLength: data?.byteLength,
+        firstBytes: data ? Array.from(new Uint8Array(data).slice(0, 16)) : null,
+        cliEngineActive: CONFIGURATOR.cliEngineActive,
+    });
+    if (data && data.byteLength > 0) {
+        if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+    }
+};
+```
+
+**기대 결과**: `dump` 입력 후 로그가 찍히는지, `firstBytes`가 ASCII 코드인지 확인.
+- 만약 `[35, 32, ...]` = `['#', ' ', ...]` 식이라면 → CLI 응답이 BLE로 들어오는 것 확인.
+- 만약 로그 자체가 안 찍히면 → BLE RX가 네이티브 단에서 막힘 (5.1 재확인).
+
+### 5.3 단계 3: MSP 재조립기 emit 여부
+
+`src/js/serial.js`의 `createMspReassembler` 콜백에 로그 추가:
+
+```js
+self.bleRxBuffer = createMspReassembler(function (frame) {
+    console.log('[BLE REASSEMBLER DEBUG] frame emitted', {
+        byteLength: frame.byteLength,
+        firstBytes: Array.from(new Uint8Array(frame).slice(0, 8)),
+    });
+    for (let i = 0; i < self.onReceive.listeners.length; i++) {
+        self.onReceive.listeners[i]({ data: frame, connectionType: 'ble' });
+    }
+});
+```
+
+**기대 결과**: `dump` 입력 후 이 로그가 **거의 안 찍혀야 함** (raw CLI는 MSP 프레임이 아니므로).
+- 만약 `dump` 입력 후 이 로그가 안 찍히는데 5.2의 로그는 찍힌다면 → **B1 확정** (raw CLI가 재조립기에서 폐기됨).
+
+### 5.4 단계 4: `cliEngine.readSerial` 호출 여부 — ★가장 결정적
+
+`src/js/cli_engine.js`의 `readSerial` 맨 위에 로그 추가:
+
+```js
+readSerial(readInfo) {
+    console.log('[CLI RX DEBUG] readSerial called', {
+        byteLength: readInfo.data?.byteLength ?? 0,
+        cliEngineValid: CONFIGURATOR.cliEngineValid,
+        cliEngineActive: CONFIGURATOR.cliEngineActive,
+    });
+    // ... (원래 코드 유지)
+}
+```
+
+**기대 결과**:
+- USB 연결: `dump` 입력 후 이 로그가 지속적으로 찍힘.
+- BLE 연결 (이 버그): `dump` 입력 후 이 로그가 **거의 안 찍히거나, 극소수만 찍힘**.
+- 이 차이가 보이면 → **B1 100% 확정**.
+
+### 5.5 단계 5: `cliEngineValid` 상태 추적
+
+`src/js/tabs/cli.js`의 `waitForValidCliEngine`에 로그 추가:
+
+```js
+const waitForValidCliEngine = setInterval(() => {
+    console.log('[CLI ENTER DEBUG] polling cliEngineValid =',
+                CONFIGURATOR.cliEngineValid);
+    if (CONFIGURATOR.cliEngineValid) {
+        clearInterval(waitForValidCliEngine);
+        GUI.timeout_add('enter_cli', () => resolve(), 500);
+    }
+}, 500);
+```
+
+**기대 결과**:
+- USB: 수 초 내에 `cliEngineValid = true`로 전환.
+- BLE (이 버그): 영원히 `false`. 30초 이상 폴링하면 → **B2 확정**.
+
+### 5.6 단계 6: MTU 실제 협상 값 확인
+
+`src/js/serial.js`의 `connectBLE`에서 MTU 설정 부분에 로그 추가:
+
+```js
+self.bleMtu = peripheral.mtu || BLE_REQUESTED_MTU;
+console.log('[BLE MTU DEBUG]', {
+    peripheralMtu: peripheral.mtu,
+    bleMtu: self.bleMtu,
+    BLE_REQUESTED_MTU,
+    BLE_DEFAULT_MTU,
+});
+```
+
+**기대 결과**: `peripheral.mtu`가 `undefined`인데 `bleMtu`가 247로 설정된다면 → **B3 확정**.
+
+### 5.7 단계 7: Betaflight Configurator와의 비교
+
+- 같은 FC, 같은 BLE 브릿지, 같은 폰에서 Betaflight Configurator APK로 연결
+- Betaflight Configurator는 BLE+CLI가 정상 동작하는지 확인
+- Betaflight Configurator의 BLE RX 코드를 참고: `bf_serial.js`의 `_setupEventForwarding` (재조립기 없이 raw dispatch)
+
+---
+
+## 6. 수정 작업 (원인 확정 후 진행)
+
+> **원칙**: 한 번에 한 가지만 수정하고, 매번 3단계 재현 절차를 다시 실행하세요. 특히 BLE는 디버깅 사이클이 길므로 (빌드 → 설치 → 연결 → 재현), 한 번에 여러 군데 고치면 어디가 효과가 있었는지 알 수 없습니다.
+
+### 6.1 수정 1 (★가장 중요) — BLE RX에서 CLI 모드일 때 MSP 재조립기를 우회
+
+**목표**: `CONFIGURATOR.cliEngineActive === true`이면 BLE RX를 재조립기에 넣지 않고 raw 바이트를 `onReceive.listeners`로 직접 전달.
+
+**파일**: `src/js/serial.js`
+
+**수정 위치**: `_bleReceiveHandler` (약 line 283-289)
+
+**수정 전**:
+```js
+self._bleReceiveHandler = function (e) {
+    const data = e.detail;
+    if (data && data.byteLength > 0) {
+        if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+    }
+};
+```
+
+**수정 후**:
+```js
+self._bleReceiveHandler = function (e) {
+    const data = e.detail;
+    if (!data || data.byteLength === 0) return;
+
+    // ★ CLI 모드에서는 MSP 재조립기를 우회하고 raw 바이트를 직접 전달
+    if (CONFIGURATOR.cliEngineActive) {
+        for (let i = 0; i < self.onReceive.listeners.length; i++) {
+            self.onReceive.listeners[i]({
+                data: data.buffer,
+                connectionType: 'ble',
+            });
+        }
+        return;
+    }
+
+    // MSP 모드에서는 기존대로 재조립기 사용
+    if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+};
+```
+
+**설명**:
+- CLI 모드(`cliEngineActive === true`)에서는 BLE로 들어오는 raw 바이트를 가공 없이 `onReceive.listeners`로 전달.
+- 이렇게 하면 `read_serial` → `TABS.cli.read` → `cliEngine.readSerial`로 정상 도달.
+- MSP 모드에서는 기존 재조립기 동작 유지 (MSP 통신이 깨지지 않도록).
+
+**검증**:
+- 5.4의 `[CLI RX DEBUG]` 로그가 `dump` 입력 후 활발하게 찍히는지 확인
+- 5.5의 `[CLI ENTER DEBUG]`에서 `cliEngineValid`가 수 초 내에 `true`로 전환되는지 확인
+- `status`, `version` 명령이 정상 출력되는지 확인
+- `dump` 전체 출력이 끊김 없이 표시되는지 확인
+- MSP 모드(다른 탭)가 여전히 정상 동작하는지 확인 (회귀 테스트 필수)
+
+---
+
+### 6.2 수정 2 — CLI 진입 폴링에 10초 타임아웃 추가
+
+**목표**: BLE 일시 끊김이나 기타 이유로 웰컴 배너가 안 올 때 무한 hang 방지.
+
+**파일**: `src/js/tabs/cli.js`
+
+**수정 위치**: `waitForValidCliEngine` (약 line 183-200)
+
+**수정 전**:
+```js
+const waitForValidCliEngine = setInterval(() => {
+    if (CONFIGURATOR.cliEngineValid) {
+        clearInterval(waitForValidCliEngine);
+        GUI.timeout_add('enter_cli', () => resolve(), 500);
+    }
+}, 500);
+```
+
+**수정 후**:
+```js
+let pollCount = 0;
+const MAX_POLLS = 20;  // 20회 × 500ms = 10초 타임아웃
+
+const waitForValidCliEngine = setInterval(() => {
+    pollCount++;
+    console.log('[CLI ENTER DEBUG] poll', pollCount, '/',
+                MAX_POLLS, 'cliEngineValid =', CONFIGURATOR.cliEngineValid);
+
+    if (CONFIGURATOR.cliEngineValid) {
+        clearInterval(waitForValidCliEngine);
+        GUI.timeout_add('enter_cli', () => resolve(), 500);
+    } else if (pollCount >= MAX_POLLS) {
+        clearInterval(waitForValidCliEngine);
+        console.error('[CLI ENTER] Timeout waiting for CLI engine validation');
+        // 사용자에게 안내 (선택)
+        GUI.log(i18n.getMessage('cliEngineEnterTimeout') ||
+                'CLI 진입 시간 초과. BLE 연결 상태를 확인하세요.');
+        // 거부하지 말고 resolve — 사용자가 어쨌든 CLI를 시도할 수 있게
+        resolve();
+    }
+}, 500);
+```
+
+**검증**:
+- BLE 끊김 시나리오에서 10초 후 콘솔에 에러 로그가 찍히는지 확인
+- 정상 BLE 연결에서는 타임아웃 전에 `cliEngineValid = true`로 전환되는지 확인
+
+---
+
+### 6.3 수정 3 — MTU 기본값 보수적으로 통일 (23으로)
+
+**목표**: Nordic 플러그인이 MTU를 안 알려주면 23으로 가정하여 안전하게 동작.
+
+**파일**: `src/js/serial.js`
+
+**수정 위치**: `connectBLE`의 MTU 설정 (약 line 309)
+
+**수정 전**:
+```js
+self.bleMtu = peripheral.mtu || BLE_REQUESTED_MTU;   // 247 (낙관)
+```
+
+**수정 후**:
+```js
+// ★ 보수적으로 23 기본값 사용. 실제 협상된 MTU가 명시되어야만 큰 값 사용.
+self.bleMtu = peripheral.mtu || BLE_DEFAULT_MTU;   // 23 (보수)
+console.log('[BLE MTU] Using MTU:', self.bleMtu,
+            '(peripheral.mtu =', peripheral.mtu, ')');
+```
+
+**추가 검증**: `BLE_DEFAULT_MTU`가 import 되어 있는지 확인. 안 되어 있으면 `import { BLE_DEFAULT_MTU } from './ble_central.js';` 추가.
+
+**검증**:
+- 5.6의 `[BLE MTU DEBUG]`에서 `bleMtu`가 23 또는 실제 협상 값인지 확인
+- MSP 명령이 BLE에서 정상 동작하는지 (회귀 테스트)
+- `dump` 입력 후 BLE write가 거부되지 않는지 (logcat 확인)
+
+---
+
+### 6.4 수정 4 — BLE `send` 분기에 `outputBuffer` overflow 보호 추가
+
+**목표**: BLE 전송 큐가 무한 증식하지 않도록 보호.
+
+**파일**: `src/js/serial.js`
+
+**수정 위치**: `send` 함수의 BLE 분기 (약 line 520-563)
+
+**수정 전**:
+```js
+if (self.connectionType === 'ble') {
+    const fragments = fragmentMspFrame(_data, self.bleMtu);
+    function sendNextFragment() {
+        // ...
+    }
+    sendNextFragment();
+}
+```
+
+**수정 후**:
+```js
+if (self.connectionType === 'ble') {
+    // ★ BLE 분기에도 overflow 보호 추가 (shift로 오래된 것부터 버림)
+    if (self.outputBuffer.length > 100) {
+        let dropped = 0;
+        while (self.outputBuffer.length > 100) {
+            self.outputBuffer.shift();  // ★ pop()이 아니라 shift() (오래된 것부터)
+            dropped++;
+        }
+        console.warn(`[BLE TX] outputBuffer overflow, dropped ${dropped} old commands`);
+    }
+
+    const fragments = fragmentMspFrame(_data, self.bleMtu);
+    function sendNextFragment() {
+        // ... (기존 코드 유지)
+    }
+    sendNextFragment();
+}
+```
+
+**참고**: `shift()`를 쓰는 이유 — `pop()`은 최신 명령을 버리므로 "방금 입력한 명령이 사라져" 사용자가 혼란. `shift()`는 오래된 명령을 버리므로, 최소한 최근 입력은 FC에 도달.
+
+**검증**:
+- CLI에서 명령을 빠르게 연속 입력했을 때 콘솔에 overflow 경고가 뜨는지
+- 그래도 최근 명령은 FC에 도달하는지
+
+---
+
+### 6.5 수정 5 — `exit\r\n` 강제 전송을 BLE+CLI 진입 시나리오에서 제외
+
+**목표**: CLI 모드로 진입하려는 사용자 의도를 존중.
+
+**파일**: `src/js/serial.js`
+
+**수정 위치**: `connectBLE`의 `exit` 전송 부분 (약 line 319-328)
+
+**수정 전**:
+```js
+const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]); // "exit\r\n"
+bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer, ...);
+```
+
+**수정 후** (선택적 — 설계 의도를 보존하되 CLI에 진입할 때는 스킵):
+```js
+// ★ 재연결 시 이전 세션이 CLI에 남아있을 수 있어 exit를 보내되,
+// 사용자가 CLI 탭을 열려는 경우에는 스킵.
+// 단순화: 항상 exit를 보내되, CLI 탭 진입 시 enterCliMode가 다시 #을 보내므로
+// 시간차로 인한 충돌은 자연 해결됨.
+
+// 안전한 방식: exit를 보내되 200ms 대기 후 CLI 진입 허용
+const exitCmd = new Uint8Array([0x65, 0x78, 0x69, 0x74, 0x0D, 0x0A]); // "exit\r\n"
+bleWrite(deviceId, self.bleServiceUUID, self.bleTxCharUUID, exitCmd.buffer, () => {
+    console.log('[BLE] Sent exit command on connect (cleanup previous CLI session)');
+});
+```
+
+**또는 더 보수적으로**:
+```js
+// ★ exit 전송 자체를 제거. 사용자가 CLI 탭을 열면 enterCliMode가 #을 보내고,
+// FC가 이미 CLI 모드면 #은 주석 처리되어 무시됨. exit는 불필요.
+// (대신, MSP 탭 진입 시에만 exit를 보내도록 별도 처리 필요)
+console.log('[BLE] Skipping forced exit on connect (was causing CLI entry conflicts)');
+```
+
+**주의**: 이 수정은 설계 의도를 변경하는 것이므로, MSP 모드 안정성에 영향을 줄 수 있습니다. **반드시 MSP 탭들이 정상 동작하는지 회귀 테스트** 하세요.
+
+**검증**:
+- BLE 연결 직후 CLI 탭 진입이 정상 동작하는지
+- BLE 연결 직후 MSP 탭(예: PID, Receiver)이 정상 동작하는지
+- 재연결 시나리오에서 이전 세션 잔재가 문제를 일으키지 않는지
+
+---
+
+### 6.6 수정 6 (선택) — MSP 모드에서도 재조립기가 non-MSP 바이트를 폐기하지 않도록 개선
+
+**목표**: B5 해결. MSP 모드에서 FC가 혼합 출력을 내보낼 때 복구 가능하도록.
+
+**파일**: `src/js/ble_central.js`
+
+**수정 위치**: `_extractFrames` (약 line 245-273)
+
+**수정 방향**:
+- non-MSP 바이트를 폐기하지 말고 별도 콜백(`onNonMspByte`)으로 emit
+- 또는 Betaflight 방식처럼 `serial.js`에서 재조립기를 제거하고 `MSP.read` 스트림 파서에 맡김
+
+**주의**: 이 수정은 B1(수정 1)로 CLI 문제가 해결된 후에도 MSP 모드 안정성을 높이기 위한 추가 작업. **반드시 수정 1을 먼저 적용하고 검증한 뒤 진행**하세요.
+
+**간단한 대안** (재조립기를 그대로 두되 non-MSP 바이트를 로깅만):
+```js
+_extractFrames: function () {
+    while (buffer.length >= 6) {
+        if (buffer[0] !== 0x24) {
+            // ★ 폐기 전에 로깅 (디버깅용)
+            // console.debug('[BLE Reassembler] non-MSP byte discarded:', buffer[0]);
+            buffer = buffer.slice(1);
+            continue;
+        }
+        // ... (기존 코드 유지)
+    }
+}
+```
+
+---
+
+## 7. 테스트 방법 (수정 후 검증)
+
+### 7.1 단위 테스트 (가능한 경우)
+- `serial.js`의 `_bleReceiveHandler`에 대해 Jest 단위 테스트 작성
+- 특히 `cliEngineActive` 분기가 올바르게 동작하는지 테스트
+- MSP 재조립기는 그대로 동작하는지 회귀 테스트
+
+### 7.2 통합 테스트 (실제 FC + BLE 사용) — ★필수
+1. **재현 절차(3.1)의 1~9단계**를 전부 다시 실행
+2. 각 단계에서 증상이 사라졌는지 확인
+3. 특히 다음 시나리오를 반드시 통과해야 함:
+   - BLE 연결 후 CLI 탭 진입 직후 `status` → 응답이 즉시 화면에 보임
+   - BLE 연결 후 CLI 탭 진입 직후 `version` → 응답이 즉시 화면에 보임
+   - BLE에서 `dump` → 전체 출력이 끊김 없이 화면에 보임
+   - BLE에서 `dump` 이후 `status` → 응답이 정상 출력됨
+   - BLE에서 `dump` 이후 `version` → 응답이 정상 출력됨
+   - BLE에서 CLI 탭 "Save" 버튼 → 저장된 파일에 `dump` 전체 내용이 포함됨
+
+### 7.3 회귀 테스트 (기존 기능이 안 깨졌는지) — ★매우 중요
+BLE 수정은 MSP 모드에 영향을 줄 수 있으므로, **반드시 다음을 확인**:
+
+- BLE 연결 후 MSP 탭(PID, Receiver, Motors 등)이 정상 동작하는지
+- BLE 연결 후 펌웨어 플래시 기능이 정상 동작하는지 (가능하면)
+- BLE 연결 후 `diff all` 명령이 정상 출력되는지
+- BLE 연결 후 자동완성이 정상 동작하는지 (`help` 결과로 명령어 자동완성이 뜨는지)
+- **USB 시리얼 연결에서도 모든 기능이 정상 동작하는지** (회귀 — BLE 수정이 USB에 영향을 주면 안 됨)
+
+### 7.4 비교 테스트
+- **동일 FC, 동일 BLE 브릿지, 동일 폰**에서 Betaflight Configurator와 수정된 이 포크를 번갈아 가며 사용
+- 사용자 경험이 동등한지 (또는 더 나은지) 확인
+- 특히 `dump` 전체 출력이 두 Configurator 모두에서 동일하게 보이는지
+
+### 7.5 BLE 안정성 테스트
+- BLE 연결을 10분 이상 유지하며 CLI 사용 — 연결이 끊기지 않는지
+- BLE 연결 끊김 후 재연결 시나리오 — 정상 복구되는지
+- 다른 BLE 기기(헤드폰 등)와 충돌 시나리오 — 간섭 영향이 있는지
+- BLE 신호가 약한 거리에서의 동작 — 타임아웃 처리가 적절한지
+
+### 7.6 성능 테스트
+- BLE에서 `dump` 5회 연속 실행 시 메모리 사용량 모니터링
+- Android 중급 기기에서 5분 이상 BLE CLI 사용 시 프리즈가 없는지
+- `adb logcat`에서 BLE 관련 에러/경고가 과도하게 발생하지 않는지
+
+---
+
+## 8. 완료 기준 (Definition of Done)
+
+다음을 **모두** 만족해야 작업 완료로 간주:
+
+### BLE+CLI 기능
+- [ ] 3.1의 재현 절차 9단계를 전부 실행했을 때 증상 A, B, C, D가 **전부** 사라짐
+- [ ] BLE 연결에서 `status`, `version` 명령이 CLI 진입 직후부터 정상 출력됨
+- [ ] BLE 연결에서 `dump` 명령의 전체 출력이 끊김 없이 화면에 표시됨
+- [ ] BLE 연결에서 `dump` 이후에도 `status`, `version` 등 입력이 정상 동작함
+- [ ] BLE 연결에서 "Save" 버튼으로 저장한 `dump` 파일에 전체 내용이 포함됨
+
+### 회귀 (절대 깨지면 안 됨)
+- [ ] BLE 연결에서 MSP 탭(PID, Receiver, Motors 등)이 정상 동작함
+- [ ] BLE 연결에서 자동완성이 정상 동작함
+- [ ] **USB 시리얼 연결에서 모든 기능이 기존과 동일하게 동작함** (★매우 중요)
+- [ ] `diff all` 명령이 BLE/USB 모두에서 정상 출력됨
+
+### 비교 및 안정성
+- [ ] Betaflight Configurator와 비교했을 때 BLE+CLI 사용자 경험이 동등하거나 더 나음
+- [ ] BLE 연결을 10분 이상 유지해도 연결이 끊기지 않음
+- [ ] BLE 재연결 시나리오에서 정상 복구됨
+- [ ] Android 중급 기기에서 5분 이상 BLE CLI 사용 시 프리즈 없음
+
+### 코드 품질
+- [ ] 5.1~5.6에서 추가한 디버그 로그를 제거 (또는 `debug` 레벨로 변경)
+- [ ] 수정 내용을 commit message에 상세히 기록 (어떤 버그를 어떻게 해결했는지)
+- [ ] 각 수정이 별도 커밋으로 분리됨 (9번 가이드 준수)
+
+---
+
+## 9. 커밋 가이드
+
+각 수정은 별도 커밋으로 분리하세요. 한 커밋에 여러 수정을 섞지 마세요.
+
+**권장 커밋 순서**:
+1. `debug: add diagnostic logging for BLE CLI freeze investigation` (5.1~5.6 로그 추가)
+2. `fix(ble): bypass MSP reassembler during CLI mode to allow raw CLI text` (수정 1 — ★핵심)
+3. `fix(cli): add 10s timeout for CLI engine validation polling` (수정 2)
+4. `fix(ble): use conservative default MTU (23) when not negotiated` (수정 3)
+5. `fix(ble): add outputBuffer overflow protection to BLE send path` (수정 4)
+6. `fix(ble): skip forced exit command on connect to avoid CLI entry conflicts` (수정 5)
+7. `chore: remove debug logging after BLE CLI fix verification` (로그 제거)
+
+**선택 커밋** (B5/B6 추가 개선):
+8. `refactor(ble): log non-MSP bytes instead of silent discard in reassembler` (수정 6)
+
+---
+
+## 10. 주의사항 및 위험 포인트
+
+### 10.1 BLE 디버깅은 느리다
+- 빌드 → 설치 → 연결 → 재현 사이클이 5~10분 소요
+- 한 번에 여러 수정을 하면 디버깅이 불가능
+- **반드시 한 번에 한 가지만 수정하고 재현**
+
+### 10.2 MSP 모드 회귀 (★가장 큰 위험)
+- 수정 1(BLE RX bypass)은 MSP 모드에 영향을 주지 않아야 함 (`cliEngineActive === true` 분기이므로)
+- 그러나 실수로 분기를 반대로 걸면 MSP가 깨짐
+- **반드시 MSP 탭들이 정상 동작하는지 7.3의 회귀 테스트로 확인**
+
+### 10.3 USB 회귀 (★두 번째로 큰 위험)
+- BLE 코드를 수정하더라도, 같은 파일(`serial.js`)의 공통 코드를 건드리면 USB가 깨질 수 있음
+- **반드시 USB 시리얼 연결로 모든 기능이 정상 동작하는지 확인**
+
+### 10.4 BLE 브릿지 펌웨어 다양성
+- SpeedyBee BT Nano 3, HM-10, CC2541, nRF52 등 다양한 BLE 브릿지가 있음
+- 각각의 펌웨어 동작이 미세하게 다를 수 있음
+- 가능하면 여러 BLE 브릿지로 테스트 (최소 2종 이상)
+
+### 10.5 MTU 협상 실패 시나리오
+- 일부 구형 Android 폰이나 구형 BLE 브릿지는 MTU 247 협상을 지원하지 않음
+- MTU 23으로 동작 시 BLE 전송 속도가 매우 느림 (이론상 ~5KB/s)
+- `dump` 같은 대량 출력은 23B 청크로 쪼개져 수십 초 소요될 수 있음
+- 사용자에게 "느린 BLE 환경" 경고를 표시하는 것도 고려
+
+### 10.6 BLE 연결 끊김 처리
+- BLE는 USB보다 연결이 불안정함 (거리, 간섭, 배터리 등)
+- 연결 끊김 시 CLI 엔진이 적절히 정리되는지 확인
+- 재연결 시 이전 세션 잔재가 문제를 일으키지 않는지 확인
+
+### 10.7 네이티브 플러그인 한계
+- `NordicBlePlugin.java`의 버그는 이 작업지시서 범위 밖
+- 네이티브 로그(`adb logcat`)를 확인해 JS 단에서 해결 불가능한 문제는 플러그인 수정 필요
+- 예: `handleNotification`이 안 불리면 네이티브 문제
+
+### 10.8 Betaflight Configurator와의 코드 차이
+- Betaflight Configurator는 BLE RX를 재조립기 없이 raw로 전달
+- 이 포크는 재조립기를 강제 삽입 → 이것이 근본 설계 차이
+- 장기적으로는 Betaflight 방식으로 통일하는 것이 좋으나, 단기적으로는 수정 1(bypass)로 충분
+
+---
+
+## 11. 참고 자료
+
+### 11.1 관련 파일 (이 포크)
+- `src/js/ble_central.js` — BLE 재조립기, MTU 상수, fragmentMspFrame (B1, B3, B5 핵심)
+- `src/js/serial.js` — BLE 연결, RX/TX 분기 (B1, B3, B4, B6 핵심)
+- `src/js/serial_backend.js` — read_serial 디스패치
+- `src/js/cli_engine.js` — CLI 엔진, readSerial
+- `src/js/tabs/cli.js` — CLI 탭 진입, 폴링 (B2 핵심)
+- `src/js/nordic_ble.js` — Nordic BLE 네이티브 래퍼
+- `cordova/plugins/nordic-ble/` — Android 네이티브 플러그인 (Java)
+
+### 11.2 비교 참고 (Betaflight Configurator)
+- `betaflight/betaflight-configurator`의 `src/js/bf_serial.js`
+- `_setupEventForwarding` — BLE RX를 재조립기 없이 raw dispatch
+- `MSP.read` 스트림 파서 — non-MSP 바이트를 안전하게 skip
+
+### 11.3 Rotorflight 펌웨어 (BLE 미지원 확인용)
+- `rotorflight/rotorflight` 저장소 — `ble`/`bluetooth` 관련 코드 0건
+- BLE는 항상 외장 브릿지(SpeedyBee BT Nano 3 등)를 통해 동작
+
+### 11.4 기술 배경
+- **BLE GATT**: BLE 장치는 특성(Characteristic) 단위로 데이터 송수신. Write Without Response가 일반적.
+- **MTU**: Maximum Transmission Unit. BLE 4.2+에서 247B까지 협상 가능. 기본값 23B.
+- **MSP 프로토콜**: `$M<direction><size><code><payload><crc>` 형식. direction은 `<` (FC→PC) 또는 `>` (PC→FC).
+- **투명 BLE 브릿지**: UART와 BLE GATT를 1:1 매핑. 프로토콜 해석 없이 바이트만 전달.
+- **Cordova WebView**: Android의 Chrome WebView 기반. `requestAnimationFrame`이 백그라운드에서 안 불릴 수 있음.
+
+---
+
+## 12. 최종 점검 체크리스트
+
+작업을 PR로 올리기 전 아래를 전부 확인하세요:
+
+### BLE+CLI 기능
+- [ ] 3.1의 9단계 재현 절차를 전부 통과
+- [ ] 7.2의 통합 테스트 6개 시나리오를 전부 통과
+- [ ] 7.4의 비교 테스트에서 Betaflight Configurator와 동등 이상
+
+### 회귀 (★필수)
+- [ ] 7.3의 회귀 테스트 5개 항목을 전부 통과
+- [ ] 특히 USB 시리얼에서 모든 기능이 정상 동작
+- [ ] 특히 BLE에서 MSP 탭들이 정상 동작
+
+### 안정성
+- [ ] 7.5의 BLE 안정성 테스트 4개 시나리오를 전부 통과
+- [ ] 7.6의 성능 테스트에서 메모리 누수 없음
+
+### 코드 품질
+- [ ] 5.1~5.6의 디버그 로그를 제거했거나 `debug` 레벨로 변경
+- [ ] 각 수정이 별도 커밋으로 분리되어 있음 (9번 가이드 준수)
+- [ ] commit message에 "어떤 BLE 버그를 어떻게 해결했는지"가 명시되어 있음
+
+---
+
+## 부록 A: BLE 데이터 흐름도 (수정 전/후 비교)
+
+### 수정 전 (현재 버그 상태)
+```
+FC CLI 출력 (raw ASCII) → BLE 브릿지 → NordicBle 알림
+  ↓
+serial._bleReceiveHandler
+  ↓
+createMspReassembler.append()
+  ↓
+_extractFrames: buffer[0] !== '$' → ★폐기★ (raw CLI 텍스트 전부 사라짐)
+  ↓ (오직 MSP 프레임만)
+onReceive.listeners
+  ↓
+read_serial → cliEngineActive === true → cliEngine.readSerial
+  ⛔ 도달 자체를 안 함 (CLI 텍스트가 이미 폐기됨)
+```
+
+### 수정 후 (수정 1 적용)
+```
+FC CLI 출력 (raw ASCII) → BLE 브릿지 → NordicBle 알림
+  ↓
+serial._bleReceiveHandler
+  ↓
+cliEngineActive === true? ──── Yes ──→ onReceive.listeners({data: raw, connectionType: 'ble'})
+  │                                          ↓
+  │                                  read_serial → cliEngine.readSerial ✅
+  │                                          ↓
+  No (MSP 모드)                         화면에 정상 출력
+  ↓
+createMspReassembler.append() (MSP 모드는 기존대로)
+  ↓
+onReceive.listeners({data: MSP frame})
+  ↓
+read_serial → MSP.read ✅
+```
+
+---
+
+## 부록 B: 디버깅 치트시트
+
+| 증상 | 가장 먼저 볼 것 | 콘솔 필터 | 로그 위치 |
+|---|---|---|---|
+| BLE에서 `status` 안 보임 | `cliEngine.readSerial` 호출 여부 | `[CLI RX DEBUG]` | cli_engine.js:368 |
+| BLE에서 `dump` 1/3만 보임 | MSP 재조립기 emit 여부 | `[BLE REASSEMBLER DEBUG]` | serial.js:261 |
+| BLE CLI 진입 후 hang | `cliEngineValid` 상태 | `[CLI ENTER DEBUG]` | tabs/cli.js:191 |
+| BLE 연결 불안정 | MTU 협상 값 | `[BLE MTU DEBUG]` | serial.js:309 |
+| BLE TX 지연/누락 | outputBuffer overflow | `[BLE TX]` | serial.js:520 |
+| BLE 네이티브 문제 | NordicBlePlugin 로그 | `adb logcat -s NordicBlePlugin` | (네이티브) |
+
+---
+
+## 부록 C: 코드 위치 빠른 참조
+
+```
+src/js/serial.js
+├── connectBLE() (line 258-342)
+│   ├── self.bleRxBuffer = createMspReassembler(...)  ← B1 (재조립기 강제 결합)
+│   ├── self._bleReceiveHandler                       ← ★수정 1 (CLI bypass 분기 추가)
+│   ├── self.bleMtu = peripheral.mtu || ...           ← B3 (수정 3)
+│   └── exit 명령 강제 전송                            ← B6 (수정 5)
+│
+├── send() (line 502-614)
+│   ├── BLE 분기 (line 520-563)                       ← B4 (수정 4 — overflow 보호 추가)
+│   └── serial/TCP 분기 (line 564-614)
+│       └── overflow 보호 (line 594-601)              ← B8 (참고용, BLE는 별도)
+│
+└── onReceive.addListener (line 615-648)
+    └── BLE는 리스너만 저장
+
+src/js/ble_central.js
+├── BLE_DEFAULT_MTU = 23 (line 27)                    ← B3 참조
+├── BLE_REQUESTED_MTU = 247 (line 28)                 ← B3 참조
+├── fragmentMspFrame (line 222-231)                   ← TX용 (raw 청크 분할만)
+└── createMspReassembler._extractFrames (line 234-276)
+    └── buffer[0] !== 0x24 → slice(1) 폐기            ← ★B1 핵심 (수정 1로 bypass)
+
+src/js/cli_engine.js
+├── enterCliMode() (line 131-139)                     ← # 전송 (TX는 정상)
+├── readSerial() (line 368-464)                       ← ★수정 1 적용 후 호출됨
+└── #send() (line 492-501)                            ← CLI 명령 TX (정상)
+
+src/js/tabs/cli.js
+└── waitForValidCliEngine (line 183-200)              ← B2 (수정 2 — 타임아웃 추가)
+
+src/js/serial_backend.js
+└── read_serial() (line 626-639)                      ← CLI/MSP 분기 (수정 불필요)
+```
+
+---
+
+**이 문서를 끝까지 읽었다면, 2절의 핵심 파일 6개를 먼저 전부 읽고 3절의 재현 절차를 실행하세요. 그 다음 5절의 조사 단계를 순서대로 진행하면 B1이 확정될 것입니다. B1이 확정되면 6.1 수정 1만 먼저 적용해 증상이 사라지는지 확인하세요 — 대부분의 증상이 여기서 해결될 것입니다. 행운을 빕니다.**

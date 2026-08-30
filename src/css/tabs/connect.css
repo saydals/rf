@@ -1,0 +1,1015 @@
+/* ==========================================================================
+   CONNECT TAB
+   Replaces the top headerbar while it is open: it owns the connection UI
+   (USB serial / Bluetooth SPP / BLE), the sensor state, the firmware and
+   expert buttons and the log. The whole tab scrolls vertically.
+   ========================================================================== */
+
+.tab-connect {
+    min-height: 100%;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+.tab-connect .connect-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px) + 10vh);
+    box-sizing: border-box;
+}
+
+/* ============ TOP BAR ============ */
+.tab-connect .connect-topbar {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    flex-wrap: nowrap;
+}
+
+#sensor-status-tab {
+    line-height: normal;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 2px 0 rgba(92, 92, 92, 0.5);
+    background-color: var(--color-surface);
+    background-image: -webkit-linear-gradient(top, transparent, rgba(0, 0, 0, 0.45));
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#sensor-status-tab ul {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 4px;
+    width: 100%;
+    justify-content: space-around;
+    flex-wrap: nowrap;
+}
+
+#sensor-status-tab li {
+    text-align: center;
+    border-radius: 5px;
+    padding: 2px;
+}
+
+#sensor-status-tab .gyroicon,
+#sensor-status-tab .accicon,
+#sensor-status-tab .magicon,
+#sensor-status-tab .baroicon,
+#sensor-status-tab .gpsicon {
+    background-repeat: no-repeat;
+    background-size: 60px;
+    background-position: top center;
+    width: 72px;
+    height: 32px;
+    padding-top: 64px;
+    line-height: 1.2;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    color: #5a5a5a;
+    display: block;
+    transition: color 0.15s ease;
+}
+
+#sensor-status-tab .gyroicon { background-image: url(/images/icons/sensor_gyro_off.png); }
+#sensor-status-tab .accicon { background-image: url(/images/icons/sensor_acc_off.png); }
+#sensor-status-tab .magicon { background-image: url(/images/icons/sensor_mag_off.png); }
+#sensor-status-tab .baroicon { background-image: url(/images/icons/sensor_baro_off.png); }
+#sensor-status-tab .gpsicon { background-image: url(/images/icons/sensor_sat_off.png); }
+
+#sensor-status-tab .gyroicon.active { background-image: url(/images/icons/sensor_gyro_on.png); color: #cfe8ff; }
+#sensor-status-tab .accicon.active { background-image: url(/images/icons/sensor_acc_on.png); color: #cfe8ff; }
+#sensor-status-tab .magicon.active { background-image: url(/images/icons/sensor_mag_on.png); color: #cfe8ff; }
+#sensor-status-tab .baroicon.active { background-image: url(/images/icons/sensor_baro_on.png); color: #cfe8ff; }
+#sensor-status-tab .gpsicon.active { background-image: url(/images/icons/sensor_sat_on.png); color: #cfe8ff; }
+
+html[data-theme="light"] #sensor-status-tab .gyroicon.active,
+html[data-theme="light"] #sensor-status-tab .accicon.active,
+html[data-theme="light"] #sensor-status-tab .magicon.active,
+html[data-theme="light"] #sensor-status-tab .baroicon.active,
+html[data-theme="light"] #sensor-status-tab .gpsicon.active {
+    color: var(--color-accent-700);
+}
+
+.tab-connect .connect-topbar-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+/* Icon buttons: firmware flasher + expert mode */
+.tab-connect .connect-icon-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 76px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background-color: var(--color-surface);
+    background-image: -webkit-linear-gradient(top, transparent, rgba(0, 0, 0, 0.45));
+    box-shadow: 0 2px 0 rgba(92, 92, 92, 0.5);
+    color: var(--color-text-soft);
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    transition: all ease 0.12s;
+}
+
+.tab-connect .connect-icon-btn em {
+    font-size: 20px;
+    line-height: 1;
+}
+
+#connect-theme-btn {
+    min-width: 76px;
+    padding: 8px 14px;
+}
+
+#connect-theme-btn em {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.tab-connect .connect-icon-btn span {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.tab-connect .connect-icon-btn:hover {
+    border-color: var(--accent);
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+.tab-connect .connect-icon-btn.active {
+    border-color: var(--accent);
+    background-color: var(--color-accent-700, #1f4f6e);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(3, 117, 180, 0.55);
+}
+
+/* ============ CURRENT LINK ============ */
+.tab-connect .connect-linkbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background-color: var(--color-surface);
+    flex-wrap: wrap;
+}
+
+.tab-connect .link-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--color-neutral-400);
+    flex: 0 0 auto;
+}
+
+.tab-connect .connect-linkbar.connecting .link-dot {
+    background-color: #ffb300;
+    animation: connect-pulse 1s ease-in-out infinite;
+}
+
+.tab-connect .connect-linkbar.connected .link-dot {
+    background-color: #4caf50;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.8);
+}
+
+.tab-connect .link-text {
+    flex: 1 1 auto;
+    font-size: 12px;
+    color: var(--color-text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-connect .connect-linkbar.connected .link-text {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.tab-connect .connect-disconnect-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    line-height: 30px;
+    border-radius: 4px;
+    border: 1px solid #b71c1c;
+    background-color: #e53935;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    flex: 0 0 auto;
+}
+
+.tab-connect .connect-disconnect-btn.connecting {
+    border-color: #ef6c00;
+    background-color: #ffb300;
+}
+
+.tab-connect .connect-disconnect-btn.connecting:hover {
+    background-color: #ffc233;
+}
+
+.tab-connect .connect-disconnect-btn.hidden {
+    display: none;
+}
+
+.tab-connect .connect-disconnect-btn:hover {
+    background-color: #f05545;
+    text-decoration: none;
+}
+
+@keyframes connect-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* ============ SECTIONS ============ */
+.tab-connect .connect-section {
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background-color: var(--color-surface);
+    box-sizing: border-box;
+}
+
+.tab-connect .connect-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    background-color: hsl(202, 60%, 90%);
+    border-bottom: 1px solid var(--color-border);
+    border-radius: 5px 5px 0 0;
+    flex-wrap: wrap;
+}
+
+html[data-theme="dark"] .tab-connect .connect-section-header {
+    background-color: var(--color-surface-alt);
+}
+
+.tab-connect .connect-section-header h3 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.3px;
+}
+
+.tab-connect .section-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-neutral-400);
+    flex: 0 0 auto;
+}
+
+.tab-connect .section-dot.scanning {
+    background-color: #ffb300;
+    animation: connect-pulse 1s ease-in-out infinite;
+}
+
+.tab-connect .section-dot.connected {
+    background-color: #4caf50;
+}
+
+.tab-connect .section-dot.error {
+    background-color: #e53935;
+}
+
+.tab-connect .section-state {
+    flex: 1 1 auto;
+    font-size: 11px;
+    color: var(--color-text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-connect .section-baud {
+    flex: 0 0 auto;
+    width: 108px;
+}
+
+.tab-connect .section-baud select {
+    width: 100%;
+}
+
+/* Override the dark dropdown theme for the baud-rate selector so the
+   value is readable: white background with black text instead of the
+   dark background / faint grey text used elsewhere. We use !important
+   because .dropdown-dark applies a background-image gradient and a
+   text-shadow that would otherwise bleed through and keep the value
+   looking grey-on-dark. */
+.tab-connect .section-baud,
+.tab-connect .section-baud.dropdown-dark,
+.tab-connect .section-baud.dropdown,
+.tab-connect .section-baud .dropdown-dark,
+.tab-connect .section-baud .dropdown-select,
+.tab-connect #connect-baud {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    color: #000000 !important;
+    border-color: #c0c0c0 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+}
+
+.tab-connect .section-baud .dropdown-dark .dropdown-select option,
+.tab-connect .section-baud option,
+.tab-connect #connect-baud option {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    text-shadow: none !important;
+}
+
+/* Force native dropdown popup (option list) to use a white-on-black theme.
+   The browser still owns the popup window, so the best we can do is set
+   color on the <select> so the native chrome inherits readable colours. */
+.tab-connect #connect-baud {
+    color-scheme: light;
+}
+
+.tab-connect .section-scan-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    line-height: 26px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background-color: var(--color-surface-alt);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    transition: all ease 0.12s;
+}
+
+.tab-connect .section-scan-btn:hover {
+    background-color: var(--accent);
+    border-color: var(--color-border-accent);
+    color: #fff;
+    text-decoration: none;
+}
+
+.tab-connect .section-scan-btn.scanning {
+    background-color: #ffb300;
+    border-color: #ef6c00;
+    color: #2e2e2e;
+}
+
+.tab-connect .section-scan-btn.scanning em {
+    animation: connect-spin 1s linear infinite;
+}
+
+@keyframes connect-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ============ DEVICE LIST ============ */
+.tab-connect .device-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: calc(3 * 50px);
+    overflow-y: auto;
+}
+
+.tab-connect .device-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tab-connect .device-item:last-child {
+    border-bottom: none;
+}
+
+.tab-connect .device-item.connected {
+    background-color: rgba(76, 175, 80, 0.14);
+}
+
+.tab-connect .device-item.connecting {
+    background-color: rgba(255, 179, 0, 0.18);
+}
+
+.tab-connect .device-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tab-connect .device-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-connect .device-meta {
+    font-size: 10px;
+    color: var(--color-text-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-connect .device-btn {
+    flex: 0 0 auto;
+    min-width: 88px;
+    padding: 0 12px;
+    line-height: 28px;
+    border-radius: 4px;
+    border: 1px solid #2e7d32;
+    background-color: #43a047;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    user-select: none;
+    transition: all ease 0.12s;
+}
+
+.tab-connect .device-btn:hover {
+    background-color: #66bb6a;
+    border-color: #388e3c;
+    text-decoration: none;
+}
+
+.tab-connect .device-btn.connecting {
+    border-color: #ef6c00;
+    background-color: #ffb300;
+}
+
+.tab-connect .device-btn.connecting:hover {
+    background-color: #ffc233;
+}
+
+.tab-connect .device-btn.disabled {
+    background-color: var(--color-surface-alt);
+    border-color: var(--color-surface-alt);
+    color: var(--color-text-disabled);
+    pointer-events: none;
+    cursor: default;
+}
+
+.tab-connect .device-btn-disconnect {
+    background-color: #e53935;
+    border-color: #b71c1c;
+}
+
+.tab-connect .device-btn-disconnect:hover {
+    background-color: #f05545;
+    border-color: #c62828;
+}
+
+.tab-connect .device-empty {
+    padding: 14px 10px;
+    font-size: 11px;
+    color: var(--color-text-soft);
+    text-align: center;
+}
+
+/* ============ LOG ============ */
+.tab-connect .connect-log-section {
+    margin-bottom: 4px;
+}
+
+#log-tab {
+    background-color: var(--color-surface-alt);
+    color: var(--color-text-soft);
+    line-height: 19px;
+    font-size: 12px;
+    max-height: 130px;
+    overflow-y: auto;
+    border-radius: 0 0 5px 5px;
+    box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+    transition: max-height 0.2s;
+}
+
+#log-tab.expanded {
+    max-height: 380px;
+}
+
+#log-tab .wrapper {
+    padding: 5px 5px 4px 10px;
+}
+
+#log-tab .wrapper > *,
+#log-tab .wrapper > * > * {
+    user-select: text;
+}
+
+#log-tab a {
+    font-weight: normal;
+    color: #ffbb00;
+}
+
+/* ============ CONNECTION DASHBOARD ============ */
+.tab-connect .connect-content {
+    max-width: 1100px;
+    margin: 0 auto;
+    gap: 14px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+.tab-connect .connect-topbar {
+    align-items: stretch;
+    gap: 10px;
+}
+
+#sensor-status-tab,
+.tab-connect .connect-icon-btn,
+.tab-connect .connect-linkbar,
+.tab-connect .connect-section {
+    border-radius: 8px;
+    border-color: var(--color-border);
+    box-shadow: 0 2px 8px var(--color-shadow);
+    background-color: var(--color-surface);
+    background-image: none;
+}
+
+#sensor-status-tab {
+    padding: 6px 10px;
+}
+
+.tab-connect .connect-icon-btn {
+    min-width: 82px;
+    min-height: 48px;
+    padding: 6px 10px;
+}
+
+.tab-connect .connect-icon-btn:hover,
+.tab-connect .section-scan-btn:hover {
+    border-color: var(--color-border-accent);
+    background-color: var(--color-hover);
+    color: var(--color-text);
+}
+
+.tab-connect .connect-linkbar {
+    min-height: 40px;
+    padding: 7px 12px;
+}
+
+.tab-connect .connect-linkbar.connected {
+    border-color: var(--color-border-accent);
+    background-color: var(--color-surface);
+}
+
+.tab-connect .connect-section {
+    overflow: hidden;
+}
+
+.tab-connect .connect-section-header {
+    min-height: 40px;
+    padding: 6px 12px;
+    background-color: var(--color-surface-alt);
+}
+
+.tab-connect .connect-section-header h3 {
+    font-size: 14px;
+    letter-spacing: 0.15px;
+    color: #fff;
+}
+
+.tab-connect .connect-wireless-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.tab-connect .connect-wireless-grid .connect-section {
+    min-width: 0;
+}
+
+.tab-connect .device-list {
+    max-height: 220px;
+    padding: 6px 10px;
+}
+
+.tab-connect .device-item {
+    min-height: 48px;
+    margin: 4px 0;
+    padding: 7px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background-color: var(--color-surface);
+}
+
+.tab-connect .device-item:hover {
+    border-color: var(--color-border-accent);
+    background-color: var(--color-hover);
+}
+
+.tab-connect .device-item.connected {
+    border-color: var(--color-border-accent);
+    background-color: var(--color-surface-alt);
+}
+
+.tab-connect .device-btn {
+    min-width: 92px;
+    line-height: 28px;
+    border-radius: 5px;
+}
+
+.tab-connect .device-empty {
+    padding: 16px 12px;
+}
+
+/* Logs remain available to the legacy mirror, but are not part of the primary UI. */
+.tab-connect .connect-log-section {
+    display: none;
+}
+
+/* ============ LIGHT THEME BLUE OVERRIDES ============ */
+html[data-theme="light"] .tab-connect .connect-section {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+}
+
+html[data-theme="light"] .tab-connect .connect-section-header {
+    background-color: #1565c0;
+    border-bottom-color: #0d47a1;
+}
+
+html[data-theme="light"] .tab-connect .connect-section-header h3 {
+    color: #fff;
+}
+
+html[data-theme="light"] .tab-connect .section-scan-btn {
+    background-color: #c62828;
+    border-color: #b71c1c;
+    color: #fff;
+}
+
+html[data-theme="light"] .tab-connect .section-scan-btn:hover {
+    background-color: #b71c1c;
+    border-color: #8e0000;
+    color: #fff;
+}
+
+html[data-theme="light"] .tab-connect .section-scan-btn.scanning {
+    background-color: #ffb300;
+    border-color: #ef6c00;
+    color: #2e2e2e;
+}
+
+html[data-theme="light"] .tab-connect .connect-linkbar {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+}
+
+html[data-theme="light"] .tab-connect .connect-linkbar.connected {
+    background-color: #bbdefb;
+    border-color: #42a5f5;
+}
+
+html[data-theme="light"] .tab-connect #sensor-status-tab {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+}
+
+html[data-theme="light"] .tab-connect .connect-icon-btn {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+    background-image: -webkit-linear-gradient(top, transparent, rgba(0, 0, 0, 0.1));
+}
+
+html[data-theme="light"] .tab-connect .connect-icon-btn:hover {
+    border-color: #42a5f5;
+    background-color: #bbdefb;
+    color: var(--color-text);
+}
+
+html[data-theme="light"] .tab-connect .connect-icon-btn.active {
+    background-color: #0d47a1;
+    border-color: #1565c0;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(21, 101, 192, 0.55);
+}
+
+html[data-theme="light"] .tab-connect .device-item {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+}
+
+html[data-theme="light"] .tab-connect .device-item:hover {
+    border-color: #42a5f5;
+    background-color: #bbdefb;
+}
+
+html[data-theme="light"] .tab-connect .device-item.connected {
+    background-color: #bbdefb;
+    border-color: #42a5f5;
+}
+
+/* Device buttons keep the same colours in both themes (green - amber - red) */
+
+html[data-theme="light"] .tab-connect .device-btn.disabled {
+    background-color: #e3f2fd;
+    border-color: #90caf9;
+    color: var(--color-text-disabled);
+}
+
+html[data-theme="light"] .tab-connect .section-dot {
+    background-color: var(--color-neutral-400);
+}
+
+html[data-theme="light"] .tab-connect .section-dot.scanning {
+    background-color: #ffb300;
+}
+
+html[data-theme="light"] .tab-connect .section-dot.connected {
+    background-color: #4caf50;
+}
+
+html[data-theme="light"] .tab-connect .section-dot.error {
+    background-color: #e53935;
+}
+
+html[data-theme="light"] .tab-connect .section-state {
+    color: var(--color-text-soft);
+}
+
+html[data-theme="light"] .tab-connect .link-dot {
+    background-color: var(--color-neutral-400);
+}
+
+html[data-theme="light"] .tab-connect .connect-linkbar.connecting .link-dot {
+    background-color: #ffb300;
+}
+
+html[data-theme="light"] .tab-connect .connect-linkbar.connected .link-dot {
+    background-color: #4caf50;
+}
+
+html[data-theme="light"] .tab-connect .link-text {
+    color: var(--color-text-soft);
+}
+
+html[data-theme="light"] .tab-connect .connect-linkbar.connected .link-text {
+    color: var(--color-text);
+}
+
+html[data-theme="light"] .tab-connect .device-name {
+    color: var(--color-text);
+}
+
+html[data-theme="light"] .tab-connect .device-meta {
+    color: var(--color-text-soft);
+}
+
+html[data-theme="light"] .tab-connect .device-empty {
+    color: var(--color-text-soft);
+}
+
+/* ============ RESPONSIVE ============ */
+@media all and (max-width: 575px) {
+    .tab-connect .connect-content {
+        padding: 10px;
+    }
+
+    .tab-connect .connect-wireless-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .tab-connect .connect-content {
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .tab-connect .connect-topbar-actions {
+        flex: 0 0 auto;
+        justify-content: flex-end;
+    }
+
+    #sensor-status-tab {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 4px 6px;
+    }
+
+    #sensor-status-tab ul {
+        flex-wrap: nowrap;
+        gap: 2px;
+    }
+
+    #sensor-status-tab li {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 1px;
+    }
+
+    #sensor-status-tab .gyroicon,
+    #sensor-status-tab .accicon,
+    #sensor-status-tab .magicon,
+    #sensor-status-tab .baroicon,
+    #sensor-status-tab .gpsicon {
+        background-size: 54px;
+        width: 100%;
+        max-width: 64px;
+        min-width: 0;
+        height: 30px;
+        padding-top: 54px;
+        font-size: 10px;
+    }
+
+    /* Top row stays on a single line in portrait and shares the available
+       width between the three blocks. On standard-sized phones the sensor
+       strip is no longer pinched next to the action buttons. */
+    .tab-connect .connect-topbar {
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .tab-connect .connect-icon-btn {
+        flex: 0 1 88px;
+        min-width: 64px;
+        min-height: 48px;
+        padding: 6px 8px;
+    }
+
+    #connect-theme-btn {
+        flex: 0 1 80px;
+        min-width: 64px;
+        padding: 6px 10px;
+    }
+
+    .tab-connect .connect-icon-btn em {
+        font-size: 18px;
+    }
+
+    #connect-theme-btn em {
+        font-size: 20px;
+    }
+
+    .tab-connect .device-btn {
+        min-width: 76px;
+    }
+
+    .tab-connect .section-baud {
+        width: 92px;
+    }
+}
+
+/* Landscape phones: keep the top bar compact so the lists stay reachable */
+@media all and (orientation: landscape) and (max-height: 480px) {
+    #sensor-status-tab {
+        padding: 6px 10px;
+    }
+
+    #sensor-status-tab .gyroicon,
+    #sensor-status-tab .accicon,
+    #sensor-status-tab .magicon,
+    #sensor-status-tab .baroicon,
+    #sensor-status-tab .gpsicon {
+        background-size: 64px;
+        width: 84px;
+        height: 32px;
+        padding-top: 68px;
+        font-size: 10px;
+    }
+
+    .tab-connect .connect-icon-btn {
+        min-width: 54px;
+        padding: 6px 8px;
+    }
+
+    #log-tab {
+        max-height: 100px;
+    }
+}
+
+/* Ultra-narrow portrait phones: not even the compact labels fit next to the
+   sensor strip, so drop the THEME/EXIT labels and show icons only. */
+@media all and (max-width: 374px) {
+    .tab-connect .connect-icon-btn {
+        flex: 0 0 56px;
+        min-width: 56px;
+    }
+
+    #connect-theme-btn {
+        flex: 0 0 56px;
+    }
+
+    .tab-connect .connect-icon-btn span {
+        display: none;
+    }
+
+    #sensor-status-tab .gyroicon,
+    #sensor-status-tab .accicon,
+    #sensor-status-tab .magicon,
+    #sensor-status-tab .baroicon,
+    #sensor-status-tab .gpsicon {
+        background-size: 36px;
+        max-width: 42px;
+        height: 20px;
+        padding-top: 38px;
+        font-size: 7px;
+    }
+}
+
+/* ============ LOADING OVERLAY ============ */
+/* Shown over the connect tab while the post-connect MSP batch is in flight.
+   Dismissed by the user touching anywhere, or by hideLoadingPopup() once
+   the awaited batch resolves. No timeout — BLE responses can take tens of
+   seconds, so we never want to drop the overlay while data is still loading.
+
+   High-contrast "warning" style so the overlay is always easy to spot:
+   yellow background, black text, thick black border. Only a spinner + label
+   is shown (no progress bar). */
+.loading-popup-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    touch-action: manipulation;
+    pointer-events: auto;
+    transition: opacity 120ms ease-out;
+}
+
+.loading-popup-overlay.loading-popup-hidden {
+    display: none;
+}
+
+.loading-popup-overlay.loading-popup-visible {
+    display: flex;
+}
+
+.loading-popup-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 22px;
+    min-width: 180px;
+    border-radius: 10px;
+    background: #ffd60a;                /* 노랑 바탕 */
+    color: #000000;                     /* 검은 글씨 */
+    border: 3px solid #000000;          /* 검은 외각선 */
+    box-shadow: 0 4px 0 #000000, 0 8px 24px rgba(0, 0, 0, 0.45);
+    font-size: 14px;
+    text-align: center;
+}
+
+.loading-popup-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid rgba(0, 0, 0, 0.15);
+    border-top-color: #1976ff;          /* 파란색 회전 부분 */
+    border-radius: 50%;
+    animation: loading-popup-spin 0.9s linear infinite;
+}
+
+.loading-popup-message {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #000000;
+}
+
+@keyframes loading-popup-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

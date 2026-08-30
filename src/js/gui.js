@@ -1,0 +1,480 @@
+import * as config from '@/js/config.js';
+import { CONFIGURATOR } from "@/js/configurator.svelte.js";
+import { getTabHelpURL } from "@/js/help.js";
+import { i18n } from "@/js/localization.js";
+import { showTabExitDialog } from "@/js/main.js";
+import { MSP } from "@/js/msp.svelte.js";
+
+const GUI_MODES = {
+    NWJS: "NW.js",
+    Cordova: "Cordova",
+    Other: "Other",
+};
+
+export const GuiControl = function () {
+    this.auto_connect = false;
+    this.show_all_ports = false;
+    this.connecting_to = false;
+    this.connected_to = false;
+    this.connect_lock = false;
+    this.zoom_level = 100;
+    this.active_tab = null;
+    this.current_tab = null;
+    this.tab_switch_in_progress = false;
+    this.reboot_in_progress = false;
+    this.operating_system = null;
+    this.interval_array = [];
+    this.timeout_array = [];
+
+    this.defaultAllowedTabsWhenDisconnected = [
+        'connect',
+        'landing',
+        'firmware_flasher',
+        'privacy_policy',
+        'options',
+        'help',
+    ];
+    this.defaultAllowedFCTabsWhenConnected = [
+        'connect',
+        'status',
+        'setup',
+        'failsafe',
+        'power',
+        'adjustments',
+        'auxiliary',
+        'cli',
+        'configuration',
+        'beepers',
+        'gps',
+        'led_strip',
+        'blackbox',
+        'modes',
+        'motors',
+        'governor',
+        'mixer',
+        'profiles',
+        'rates',
+        'gyro',
+        'receiver',
+        'sensors',
+        'servos',
+        'presets',
+    ];
+
+    this.allowedTabs = this.defaultAllowedTabsWhenDisconnected;
+
+    // check which operating system is user running
+    this.operating_system = GUI_checkOperatingSystem();
+
+    this.zoomBoxTimeout = null;
+
+    // Check the method of execution
+    if (__BACKEND__ === "nwjs") {
+        this.nwGui = nw;
+        this.Mode = GUI_MODES.NWJS;
+    }
+
+    if (__BACKEND__ === "cordova") {
+        this.Mode = GUI_MODES.Cordova;
+    }
+};
+
+function GUI_checkOperatingSystem() {
+    if (navigator.appVersion.indexOf("Win") !== -1) {
+        return "Windows";
+    } else if (navigator.appVersion.indexOf("Mac") !== -1) {
+        return "MacOS";
+    } else if (navigator.appVersion.indexOf("Android") !== -1) {
+        return "Android";
+    } else if (navigator.appVersion.indexOf("Linux") !== -1) {
+        return "Linux";
+    } else if (navigator.appVersion.indexOf("X11") !== -1) {
+        return "UNIX";
+    } else {
+        return "Unknown";
+    }
+}
+
+// Timer managing methods
+
+// name = string
+// code = function reference (code to be executed)
+// interval = time interval in miliseconds
+// first = true/false if code should be ran initially before next timer interval hits
+GuiControl.prototype.interval_add = function (name, code, interval, first) {
+    const data = {'name': name, 'timer': null, 'code': code, 'interval': interval, 'fired': 0, 'paused': false};
+
+    if (first === true) {
+        code(); // execute code
+
+        data.fired++; // increment counter
+    }
+
+    data.timer = setInterval(function() {
+        code(); // execute code
+
+        data.fired++; // increment counter
+    }, interval);
+
+    this.interval_array.push(data); // push to primary interval array
+
+    return data;
+};
+
+// name = string
+// code = function reference (code to be executed)
+// interval = time interval in miliseconds
+// first = true/false if code should be ran initially before next timer interval hits
+// condition = function reference with true/false result, a condition to be checked before every interval code execution
+GuiControl.prototype.interval_add_condition = function (name, code, interval, first, condition) {
+    this.interval_add(name, () => {
+        if (condition()) {
+            code();
+        } else {
+            this.interval_remove(name);
+        }
+    }, interval, first);
+};
+
+// name = string
+GuiControl.prototype.interval_remove = function (name) {
+    for (let i = 0; i < this.interval_array.length; i++) {
+        if (this.interval_array[i].name === name) {
+            clearInterval(this.interval_array[i].timer); // stop timer
+
+            this.interval_array.splice(i, 1); // remove element/object from array
+
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// name = string
+GuiControl.prototype.interval_pause = function (name) {
+    for (let i = 0; i < this.interval_array.length; i++) {
+        if (this.interval_array[i].name === name) {
+            clearInterval(this.interval_array[i].timer);
+            this.interval_array[i].paused = true;
+
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// name = string
+GuiControl.prototype.interval_resume = function (name) {
+
+    function executeCode(obj) {
+        obj.code(); // execute code
+        obj.fired++; // increment counter
+    }
+
+    for (let i = 0; i < this.interval_array.length; i++) {
+        if (this.interval_array[i].name === name && this.interval_array[i].paused) {
+            const obj = this.interval_array[i];
+
+            obj.timer = setInterval(executeCode, obj.interval, obj);
+
+            obj.paused = false;
+
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// input = array of timers thats meant to be kept, or nothing
+// return = returns timers killed in last call
+GuiControl.prototype.interval_kill_all = function (keepArray) {
+    const self = this;
+    let timersKilled = 0;
+
+    for (let i = (this.interval_array.length - 1); i >= 0; i--) { // reverse iteration
+        let keep = false;
+        if (keepArray) { // only run through the array if it exists
+            keepArray.forEach(function (name) {
+                if (self.interval_array[i].name === name) {
+                    keep = true;
+                }
+            });
+        }
+
+        if (!keep) {
+            clearInterval(this.interval_array[i].timer); // stop timer
+
+            this.interval_array.splice(i, 1); // remove element/object from array
+
+            timersKilled++;
+        }
+    }
+
+    return timersKilled;
+};
+
+// name = string
+// code = function reference (code to be executed)
+// timeout = timeout in miliseconds
+GuiControl.prototype.timeout_add = function (name, code, timeout) {
+    const self = this;
+    const data = {'name': name,
+                  'timer': null,
+                  'timeout': timeout,
+                 };
+
+    // start timer with "cleaning" callback
+    data.timer = setTimeout(function() {
+        code(); // execute code
+
+        // remove object from array
+        const index = self.timeout_array.indexOf(data);
+        if (index > -1) {
+            self.timeout_array.splice(index, 1);
+        }
+    }, timeout);
+
+    this.timeout_array.push(data); // push to primary timeout array
+
+    return data;
+};
+
+// name = string
+GuiControl.prototype.timeout_remove = function (name) {
+    for (let i = 0; i < this.timeout_array.length; i++) {
+        if (this.timeout_array[i].name === name) {
+            clearTimeout(this.timeout_array[i].timer); // stop timer
+
+            this.timeout_array.splice(i, 1); // remove element/object from array
+
+            return true;
+        }
+    }
+
+    return false;
+};
+
+// no input parameters
+// return = returns timers killed in last call
+GuiControl.prototype.timeout_kill_all = function () {
+    let timersKilled = 0;
+
+    for (let i = 0; i < this.timeout_array.length; i++) {
+        clearTimeout(this.timeout_array[i].timer); // stop timer
+
+        timersKilled++;
+    }
+
+    this.timeout_array = []; // drop objects
+
+    return timersKilled;
+};
+
+// message = string
+GuiControl.prototype.log = function (message) {
+    const commandLog = $('div#log');
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = (d.getMonth() < 9) ? `0${d.getMonth() + 1}` : (d.getMonth() + 1);
+    const date =  (d.getDate() < 10) ? `0${d.getDate()}` : d.getDate();
+    const hours = (d.getHours() < 10) ? `0${d.getHours()}` : d.getHours();
+    const minutes = (d.getMinutes() < 10) ? `0${d.getMinutes()}` : d.getMinutes();
+    const seconds = (d.getSeconds() < 10) ? `0${d.getSeconds()}` : d.getSeconds();
+    const time = `${hours}:${minutes}:${seconds}`;
+
+    const formattedDate = `${year}-${month}-${date} @${time}`;
+    $('div.wrapper', commandLog).append(`<p>${formattedDate} -- ${message}</p>`);
+    commandLog.scrollTop($('div.wrapper', commandLog).height());
+};
+
+GuiControl.prototype.tab_switch_allowed = function (callback) {
+    if (this.current_tab) {
+        if (this.current_tab.exit) {
+            this.current_tab.exit(callback);
+        }
+        else if (this.current_tab.isDirty) {
+            showTabExitDialog(this.current_tab, callback);
+        }
+        else {
+            callback?.();
+        }
+    }
+    else {
+        callback?.();
+    }
+};
+
+GuiControl.prototype.tab_switch_reload = function (callback) {
+    MSP.callbacks_cleanup();
+    this.interval_kill_all();
+
+    if (this.current_tab) {
+        this.current_tab.cleanup();
+        this.current_tab.initialize(callback);
+    }
+};
+
+GuiControl.prototype.tab_switch_cleanup = function (callback) {
+    MSP.callbacks_cleanup();
+    this.interval_kill_all();
+
+    if (this.current_tab) {
+        this.current_tab.cleanup(callback);
+    } else {
+        callback?.();
+    }
+};
+
+GuiControl.prototype.switchery = function() {
+
+    const COLOR_ACCENT = 'var(--accent)';
+    const COLOR_SWITCHERY_SECOND = 'var(--switcherysecond)';
+
+    $('.togglesmall').each(function(index, elem) {
+        const switchery = new Switchery(elem, {
+            size: 'small',
+            color: COLOR_ACCENT,
+            secondaryColor: COLOR_SWITCHERY_SECOND,
+        });
+        $(elem).on("change", function () {
+            switchery.setPosition();
+        });
+        $(elem).removeClass('togglesmall');
+    });
+
+    $('.toggle').each(function(index, elem) {
+        const switchery = new Switchery(elem, {
+            color: COLOR_ACCENT,
+            secondaryColor: COLOR_SWITCHERY_SECOND,
+        });
+        $(elem).on("change", function () {
+            switchery.setPosition();
+        });
+        $(elem).removeClass('toggle');
+    });
+
+    $('.togglemedium').each(function(index, elem) {
+        const switchery = new Switchery(elem, {
+            className: 'switcherymid',
+            color: COLOR_ACCENT,
+            secondaryColor: COLOR_SWITCHERY_SECOND,
+        });
+         $(elem).on("change", function () {
+             switchery.setPosition();
+         });
+         $(elem).removeClass('togglemedium');
+    });
+};
+
+GuiControl.prototype.set_zoom = function(zoom_level, show_box) {
+
+    if (zoom_level)
+        GUI.zoom_level = zoom_level;
+    else
+        zoom_level = GUI.zoom_level;
+
+    const percent = zoom_level + '%';
+
+    config.set({'zoomLevel': zoom_level});
+
+    nw.Window.get().zoomLevel = Math.log(zoom_level / 100) / Math.log(1.2);
+    $('#zoom-percent').text(percent);
+
+    if (show_box) {
+        $('#zoom-box').show();
+
+        clearTimeout(this.zoomBoxTimeout);
+        this.zoomBoxTimeout = setTimeout(function () {
+            $('#zoom-box').fadeOut();
+        }, 3000);
+    }
+};
+
+GuiControl.prototype.content_ready = function (callback) {
+
+    this.switchery();
+
+    // Build link to Rotorflight documentation
+    if (CONFIGURATOR.connectionValid) {
+        const tabName = $('#content .tab_title').attr("i18n");
+        const helpButton = $('#content #button-documentation');
+        helpButton.text(i18n.getMessage("buttonHelp"))
+            .attr("target", "_rfhelp")
+            .attr("rel", "noopener noreferrer")
+            .attr("href", getTabHelpURL(tabName));
+    }
+
+    // loading tooltip
+    jQuery(function() {
+
+        new jBox('Tooltip', {
+            attach: '.cf_tip',
+            trigger: 'mouseenter',
+            closeOnMouseleave: true,
+            closeOnClick: 'body',
+            delayOpen: 100,
+            delayClose: 100,
+            position: {
+                x: 'right',
+                y: 'center',
+            },
+            outside: 'x',
+        });
+
+        new jBox('Tooltip', {
+            theme: 'Widetip',
+            attach: '.cf_tip_wide',
+            trigger: 'mouseenter',
+            closeOnMouseleave: true,
+            closeOnClick: 'body',
+            delayOpen: 100,
+            delayClose: 100,
+            position: {
+                x: 'right',
+                y: 'center',
+            },
+            outside: 'x',
+        });
+    });
+
+    callback?.();
+};
+
+GuiControl.prototype.saveDefaultTab = function(tabName) {
+    config.set({ lastTab: tabName });
+};
+
+GuiControl.prototype.selectDefaultTabWhenConnected = function() {
+    $('#tabs .tab_connect a').click();
+};
+
+GuiControl.prototype.isNWJS = function () {
+  return this.Mode === GUI_MODES.NWJS;
+};
+
+GuiControl.prototype.isCordova = function () {
+    return this.Mode === GUI_MODES.Cordova;
+  };
+GuiControl.prototype.isOther = function () {
+  return this.Mode === GUI_MODES.Other;
+};
+
+GuiControl.prototype.escapeHtml = function (unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+};
+
+GuiControl.prototype.addLinksTargetBlank = function (element) {
+    element.find('a').each(function () {
+        $(this).attr('target', '_blank');
+    });
+};
+
+export const GUI = new GuiControl();

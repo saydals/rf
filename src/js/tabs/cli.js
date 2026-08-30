@@ -1,0 +1,271 @@
+import { CliAutoComplete } from "@/js/CliAutoComplete.js";
+import * as clipboard from "@/js/clipboard.js";
+import { CONFIGURATOR } from "@/js/configurator.svelte.js";
+import { disconnectLink } from "@/js/tabs/connect.js";
+import * as filesystem from '@/js/filesystem.js';
+import CliEngine from '@/js/cli_engine.js';
+import { GUI } from "@/js/gui.js";
+import { i18n } from "@/js/localization.js";
+import { generateFilename } from "@/js/main.js";
+import { UI_PHONES } from "@/js/phones_ui.js";
+
+import { TABS } from "./tabs.js";
+
+const tab = {
+    tabName: 'cli',
+    cliEngine: null,
+    GUI: {
+        snippetPreviewWindow: null,
+        copyButton: null,
+        window: null,
+        windowWrapper: null,
+        textarea: null,
+    },
+};
+
+async function copyToClipboard(text) {
+    try {
+        await clipboard.writeText(text);
+        const button = tab.GUI.copyButton;
+        const origText = button.text();
+        const origWidth = button.css("width");
+        button.text(i18n.getMessage("cliCopySuccessful"));
+        button.css({
+            width: origWidth,
+            textAlign: "center",
+        });
+        setTimeout(() => {
+            button.text(origText);
+            button.css({
+                width: "",
+                textAlign: "",
+            });
+        }, 1500);
+    } catch (err) {
+        console.warn(err);
+    }
+}
+
+tab.initialize = function (callback) {
+    const self = this;
+
+    if (GUI.active_tab !== 'cli') {
+        GUI.active_tab = 'cli';
+    }
+
+    self.cliEngine = new CliEngine();
+
+    $('#content').load("/src/tabs/cli.html", function () {
+
+        // translate to user-selected language
+        i18n.localizePage();
+
+        tab.adaptPhones();
+
+        self.GUI.copyButton = $('.tab-cli .copy');
+        self.GUI.window = $('.tab-cli .window');
+        self.GUI.windowWrapper = $('.tab-cli .window .wrapper');
+        self.GUI.textarea = $('.tab-cli textarea[name="commands"]');
+        self.GUI.enterBtn = $('.tab-cli .cli-enter-btn');
+
+        // Floating disconnect: tear down the link and return to the Connect
+        // tab. Clicking the tab link is the same path the start button uses
+        // (see main.js), which keeps the tab-switch plumbing in one place.
+        $('#cli-disconnect-btn').on('click', function () {
+            disconnectLink();
+            $('#tabs .tab_connect a').trigger('click');
+        });
+
+        // Keyboard toggle: click to open, click again to close
+        let keyboardVisible = false;
+        self.GUI.textarea.on('click', function (e) {
+            if (keyboardVisible) {
+                // Close keyboard by blurring the textarea
+                self.GUI.textarea.blur();
+                keyboardVisible = false;
+            } else {
+                self.GUI.textarea.focus();
+                keyboardVisible = true;
+            }
+        });
+
+        $('.tab-cli .save').on('click', async function () {
+            const prefix = 'cli';
+            const suffix = 'txt';
+
+            try {
+              await filesystem.writeTextFile(self.cliEngine.outputHistory, {
+                  suggestedName: generateFilename(prefix, suffix),
+                  description: `${suffix.toUpperCase()} files`,
+              });
+            } catch (err) {
+                console.log('Failed to save config', err);
+            }
+        });
+
+        $('.tab-cli .clear').on("click", function () {
+            self.cliEngine.clearOutputHistory();
+        });
+
+        self.GUI.copyButton.click(function() {
+            copyToClipboard(self.cliEngine.outputHistory);
+        });
+
+        $('.tab-cli .load').on('click', async function () {
+            const previewArea = $("#snippetpreviewcontent textarea#preview");
+
+            function executeSnippet() {
+                const commands = previewArea.val();
+                self.cliEngine.executeCommands(commands);
+                self.GUI.snippetPreviewWindow.close();
+            }
+
+            function previewCommands(result, fileName) {
+                if (!self.GUI.snippetPreviewWindow) {
+                    self.GUI.snippetPreviewWindow = new jBox("Modal", {
+                        id: "snippetPreviewWindow",
+                        width: 'auto',
+                        height: 'auto',
+                        closeButton: 'title',
+                        animation: false,
+                        isolateScroll: false,
+                        title: i18n.getMessage("cliConfirmSnippetDialogTitle", { fileName: fileName }),
+                        content: $('#snippetpreviewcontent'),
+                        onCreated: () =>
+                            $("#snippetpreviewcontent a.confirm").on('click', () => executeSnippet(fileName))
+                        ,
+                    });
+                }
+
+                const parsedLines = result.split('\n').map(line => {
+                    const lowerLine = line.toLowerCase().trim();
+                    if (
+                        lowerLine.startsWith('dump') ||
+                        lowerLine.startsWith('diff') ||
+                        lowerLine.startsWith('exit')
+                    ) {
+                        return `# ${line}`;
+                    } else {
+                        return line;
+                    }
+                }).join('\n');
+                previewArea.val(parsedLines);
+                self.GUI.snippetPreviewWindow.open();
+            }
+
+            try {
+                const file = await filesystem.readTextFile({
+                    description: "Config files",
+                    extensions: [".txt", ".config"],
+                });
+                if (!file) return;
+                previewCommands(file.content, file.name);
+            } catch (err) {
+                console.log("Failed to load config", err);
+            }
+        });
+
+        self.exit = function (callback) {
+            if (CONFIGURATOR.cliEngineActive) {
+                const dialog = $('.dialogCLIExit')[0];
+
+                $('.cliExitBackBtn').click(function () {
+                    $('.cliExitBackBtn').off('click');
+                    dialog.close();
+                });
+
+                dialog.showModal();
+            }
+            else {
+                callback?.();
+            }
+        };
+
+        self.activateCli();
+
+        GUI.saveDefaultTab('status');
+
+        GUI.content_ready(callback);
+    });
+};
+
+tab.activateCli = function () {
+    return new Promise(resolve => {
+        CONFIGURATOR.cliEngineActive = true;
+        CONFIGURATOR.cliTab = 'cli';
+        // Enter fullscreen mode: hide all non-CLI UI
+        document.body.classList.add('cli-fullscreen');
+        this.cliEngine.setUi(this.GUI.window, this.GUI.windowWrapper, this.GUI.textarea);
+        this.cliEngine.initializeAutoComplete();
+        this.cliEngine.enterCliMode();
+
+        const waitForValidCliEngine = setInterval(() => {
+            if (CONFIGURATOR.cliEngineValid) {
+                clearInterval(waitForValidCliEngine);
+                GUI.timeout_add('enter_cli', () => {
+                    resolve();
+                }, 500);
+            }
+        }, 500);
+
+        // Safety timeout: prevent infinite polling if welcome message is lost (e.g. BLE)
+        setTimeout(() => {
+            clearInterval(waitForValidCliEngine);
+            if (!CONFIGURATOR.cliEngineValid) {
+                console.warn('[CLI] Enter CLI mode timed out - forcing ready');
+                CONFIGURATOR.cliEngineValid = true;
+                GUI.timeout_add('enter_cli', () => {
+                    resolve();
+                }, 500);
+            }
+        }, 10000);
+    });
+};
+
+tab.adaptPhones = function () {
+    if ($(window).width() < 575) {
+        const backdropHeight = $('.note').height() + 22 + 38;
+        $('.backdrop').css('height', `calc(100% - ${backdropHeight}px)`);
+    }
+
+    if (GUI.isCordova()) {
+        UI_PHONES.initToolbar();
+    }
+};
+
+tab.read = function (readInfo) {
+    this.cliEngine.readSerial(readInfo);
+};
+
+tab.cleanup = function (callback) {
+    // Exit fullscreen mode
+    document.body.classList.remove('cli-fullscreen');
+
+    if (tab.GUI.snippetPreviewWindow) {
+        tab.GUI.snippetPreviewWindow.destroy();
+        tab.GUI.snippetPreviewWindow = null;
+    }
+
+    if (!(CONFIGURATOR.connectionValid && CONFIGURATOR.cliEngineValid && CONFIGURATOR.cliEngineActive)) {
+        callback?.();
+        return;
+    }
+    this.cliEngine.close(callback);
+
+    CliAutoComplete.cleanup();
+    $(CliAutoComplete).off();
+};
+
+TABS[tab.tabName] = tab;
+
+if (import.meta.hot) {
+    import.meta.hot.accept((newModule) => {
+        if (newModule && GUI.active_tab === tab.tabName) {
+            TABS[tab.tabName].initialize();
+        }
+    });
+
+    import.meta.hot.dispose(() => {
+        tab.cleanup();
+    });
+}
