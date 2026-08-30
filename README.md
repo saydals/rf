@@ -16,6 +16,10 @@ The latest Android APK build is available here:
 4. **Option to show only the tabs you need**
 5. **Added a convenient input method**
 
+**Notes**
+
+When connecting to a BLE module such as SpeedyBee, a "Data loading" popup may appear; depending on the situation it can take anywhere from a few seconds to tens of seconds. While background data is still being received, touching the screen will simply dismiss it. Force-closing it and then switching tabs greatly increases the risk of a crash. BLE module speeds vary — SpeedyBee is a module optimized for Betaflight, so for Rotorflight we recommend using a different BLE module instead. SPP remains the better choice.
+
 The actual core functionality is unchanged — only the connection part and the UI were modified, so there should be no functional errors. To make better use of the narrow screen, unnecessary elements are hidden.
 
 The screenshot section is a newly added Options item. Of the 22 feature tabs, only about 3–4 are actually used at the flying field.
