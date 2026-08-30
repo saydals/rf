@@ -14,6 +14,7 @@ The latest Android APK build is available here:
 2. **Unnecessary screens cleaned up**
 3. **Icon optimization**
 4. **Option to show only the tabs you need**
+5. **Added a convenient input method**
 
 The actual core functionality is unchanged — only the connection part and the UI were modified, so there should be no functional errors. To make better use of the narrow screen, unnecessary elements are hidden.
 
