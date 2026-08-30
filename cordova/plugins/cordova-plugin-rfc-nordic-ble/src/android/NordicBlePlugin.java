@@ -64,6 +64,12 @@ public class NordicBlePlugin extends CordovaPlugin {
     private static final String WRITE_CC2541   = "0000ffe1-0000-1000-8000-00805f9b34fb";
     private static final String NOTIFY_CC2541  = "0000ffe2-0000-1000-8000-00805f9b34fb";
 
+    // BT04 (HM-10 clone): same Service 0xFFE0 but reversed char roles
+    // FFE1 = Notify (module -> app, RX), FFE2 = Write (app -> module, TX)
+    private static final String SERVICE_BT04   = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    private static final String WRITE_BT04     = "0000ffe2-0000-1000-8000-00805f9b34fb";
+    private static final String NOTIFY_BT04    = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
     private static final String SERVICE_HC05 = "00001101-0000-1000-8000-00805f9b34fb";
     private static final String WRITE_HC05   = "00001101-0000-1000-8000-00805f9b34fb";
     private static final String NOTIFY_HC05  = "00001101-0000-1000-8000-00805f9b34fb";
@@ -96,10 +102,11 @@ public class NordicBlePlugin extends CordovaPlugin {
     private static final UUID UUID_SPEEDYBEE_V2 = UUID.fromString(SERVICE_SPEEDYBEE_V2);
     private static final UUID UUID_SPEEDYBEE_V1 = UUID.fromString(SERVICE_SPEEDYBEE_V1);
 
-    private static final Map<String, KnownDevice> KNOWN_DEVICES = new HashMap<>();
+    private static final Map<String, List<KnownDevice>> KNOWN_DEVICES = new HashMap<>();
 
     static {
         addDevice("CC2541",         SERVICE_CC2541,         WRITE_CC2541,         NOTIFY_CC2541);
+        addDevice("BT04",           SERVICE_BT04,           WRITE_BT04,           NOTIFY_BT04);
         addDevice("HC-05",          SERVICE_HC05,           WRITE_HC05,           NOTIFY_HC05);
         addDevice("HM-10",          SERVICE_HM10,           WRITE_HM10,           NOTIFY_HM10);
         addDevice("HM-11",          SERVICE_NORDIC_NUS,     NOTIFY_NORDIC_NUS,    WRITE_NORDIC_NUS);
@@ -112,7 +119,7 @@ public class NordicBlePlugin extends CordovaPlugin {
 
     private static void addDevice(String name, String service, String write, String notify) {
         KnownDevice device = new KnownDevice(name, service, write, notify);
-        KNOWN_DEVICES.put(service.toLowerCase(), device);
+        KNOWN_DEVICES.computeIfAbsent(service.toLowerCase(), k -> new ArrayList<>()).add(device);
     }
 
     // Plugin instance state
@@ -317,8 +324,10 @@ public class NordicBlePlugin extends CordovaPlugin {
         if (adapter == null) { callbackContext.error("Bluetooth adapter unavailable"); return true; }
         BluetoothDevice device = adapter.getRemoteDevice(address);
         if (device == null) { callbackContext.error("Device not found: " + address); return true; }
-        KnownDevice profile = KNOWN_DEVICES.getOrDefault(serviceUuid.toLowerCase(),
-                new KnownDevice("Unknown", serviceUuid, writeUuid, notifyUuid));
+        List<KnownDevice> candidateList = KNOWN_DEVICES.get(serviceUuid.toLowerCase());
+        KnownDevice profile = (candidateList != null && !candidateList.isEmpty())
+                ? candidateList.get(0)
+                : new KnownDevice("Unknown", serviceUuid, writeUuid, notifyUuid);
         if (bleManager != null) {
             try { bleManager.close(); } catch (Exception ignored) { }
             bleManager = null;
@@ -606,25 +615,37 @@ public class NordicBlePlugin extends CordovaPlugin {
 
     private KnownDevice findProfileForResult(ScanResult result, boolean allowNameMatch) {
         if (result.getScanRecord() != null && result.getScanRecord().getServiceUuids() != null) {
+            String advertisedName = allowNameMatch ? result.getDevice().getName() : null;
             for (ParcelUuid uuid : result.getScanRecord().getServiceUuids()) {
                 if (uuid == null) continue;
                 UUID service = uuid.getUuid();
                 if (service == null) continue;
-                if (!requestedServices.isEmpty() && requestedServices.contains(service)) {
-                    KnownDevice p = KNOWN_DEVICES.get(service.toString().toLowerCase());
-                    if (p != null) return p;
+                String serviceKey = service.toString().toLowerCase();
+                List<KnownDevice> candidates = KNOWN_DEVICES.get(serviceKey);
+                if (candidates == null || candidates.isEmpty()) continue;
+                if (advertisedName != null && !advertisedName.isEmpty()) {
+                    String nameLower = advertisedName.toLowerCase();
+                    for (KnownDevice candidate : candidates) {
+                        if (candidate.name != null && nameLower.contains(candidate.name.toLowerCase())) {
+                            return candidate;
+                        }
+                    }
                 }
-                KnownDevice known = KNOWN_DEVICES.get(service.toString().toLowerCase());
-                if (known != null) return known;
+                if (!requestedServices.isEmpty() && requestedServices.contains(service)) {
+                    return candidates.get(0);
+                }
+                return candidates.get(0);
             }
         }
         if (allowNameMatch) {
             String advertisedName = result.getDevice().getName();
             if (advertisedName != null) {
                 String name = advertisedName.toLowerCase();
-                for (KnownDevice deviceProfile : KNOWN_DEVICES.values()) {
-                    if (deviceProfile.name != null && name.contains(deviceProfile.name.toLowerCase())) {
-                        return deviceProfile;
+                for (List<KnownDevice> profileList : KNOWN_DEVICES.values()) {
+                    for (KnownDevice deviceProfile : profileList) {
+                        if (deviceProfile.name != null && name.contains(deviceProfile.name.toLowerCase())) {
+                            return deviceProfile;
+                        }
                     }
                 }
             }
@@ -744,7 +765,8 @@ public class NordicBlePlugin extends CordovaPlugin {
                         Log.w(TAG, "Service " + serviceUuid + " missing on " + gatt.getDevice().getAddress());
                         return false;
                     }
-                    KnownDevice alt = KNOWN_DEVICES.get(fallback.getUuid().toString().toLowerCase());
+                    List<KnownDevice> altList = KNOWN_DEVICES.get(fallback.getUuid().toString().toLowerCase());
+                    KnownDevice alt = (altList != null && !altList.isEmpty()) ? altList.get(0) : null;
                     if (alt == null) {
                         Log.w(TAG, "Fallback service " + fallback.getUuid()
                                 + " not in KNOWN_DEVICES on " + gatt.getDevice().getAddress());
