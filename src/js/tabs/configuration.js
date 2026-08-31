@@ -301,25 +301,31 @@ tab.initialize = function (callback) {
     }
 
     async function load_data() {
-        await MSP.promise(MSPCodes.MSP_STATUS);
-        await MSP.promise(MSPCodes.MSP_NAME);
-        await MSP.promise(MSPCodes.MSP_BOARD_INFO);
-        await MSP.promise(MSPCodes.MSP_FEATURE_CONFIG);
-        await MSP.promise(MSPCodes.MSP_ADVANCED_CONFIG);
-        await MSP.promise(MSPCodes.MSP_MIXER_CONFIG);
-        await MSP.promise(MSPCodes.MSP_SENSOR_CONFIG);
-        await MSP.promise(MSPCodes.MSP_SENSOR_ALIGNMENT);
-        await MSP.promise(MSPCodes.MSP_BOARD_ALIGNMENT_CONFIG);
-        await MSP.promise(MSPCodes.MSP_ACC_TRIM);
-        await MSP.promise(MSPCodes.MSP_SERIAL_CONFIG);
+        const requests = [
+            { code: MSPCodes.MSP_STATUS, data: false },
+            { code: MSPCodes.MSP_NAME, data: false },
+            { code: MSPCodes.MSP_BOARD_INFO, data: false },
+            { code: MSPCodes.MSP_FEATURE_CONFIG, data: false },
+            { code: MSPCodes.MSP_ADVANCED_CONFIG, data: false },
+            { code: MSPCodes.MSP_MIXER_CONFIG, data: false },
+            { code: MSPCodes.MSP_SENSOR_CONFIG, data: false },
+            { code: MSPCodes.MSP_SENSOR_ALIGNMENT, data: false },
+            { code: MSPCodes.MSP_BOARD_ALIGNMENT_CONFIG, data: false },
+            { code: MSPCodes.MSP_ACC_TRIM, data: false },
+            { code: MSPCodes.MSP_SERIAL_CONFIG, data: false },
+        ];
 
         if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_7)) {
-            await MSP.promise(MSPCodes.MSP_PILOT_CONFIG);
+            requests.push({ code: MSPCodes.MSP_PILOT_CONFIG, data: false });
         }
 
         if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_9)) {
-            await MSP.promise(MSPCodes.MSP_FLIGHT_STATS);
+            requests.push({ code: MSPCodes.MSP_FLIGHT_STATS, data: false });
         }
+
+        // BLE: 단일 합본 write + 미응답 코드 개별 재전송 (MSP.send_batch)
+        // 순차 round-trip 을 없애 탭 로드 지연을 줄인다.
+        await MSP.batchCodes(requests);
     }
 
     async function save_data(callback) {

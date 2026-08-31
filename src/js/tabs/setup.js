@@ -17,12 +17,13 @@ tab.initialize = function (callback) {
     load_data(load_html);
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_ARMING_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_FEATURE_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_ADVANCED_CONFIG))
-            .then(callback);
+        // BLE: 단일 합본 write + 미응답 코드 개별 재전송 (MSP.send_batch)
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS, data: false },
+            { code: MSPCodes.MSP_ARMING_CONFIG, data: false },
+            { code: MSPCodes.MSP_FEATURE_CONFIG, data: false },
+            { code: MSPCodes.MSP_ADVANCED_CONFIG, data: false },
+        ]).then(callback);
     }
 
     function load_html() {

@@ -73,16 +73,21 @@ tab.initialize = function (callback) {
     }
 
     async function load_data() {
-        await MSP.promise(MSPCodes.MSP_STATUS);
-        await MSP.promise(MSPCodes.MSP_BATTERY_STATE);
-        await MSP.promise(MSPCodes.MSP_VOLTAGE_METERS);
-        await MSP.promise(MSPCodes.MSP_CURRENT_METERS);
-        await MSP.promise(MSPCodes.MSP_BATTERY_CONFIG);
+        const requests = [
+            { code: MSPCodes.MSP_STATUS, data: false },
+            { code: MSPCodes.MSP_BATTERY_STATE, data: false },
+            { code: MSPCodes.MSP_VOLTAGE_METERS, data: false },
+            { code: MSPCodes.MSP_CURRENT_METERS, data: false },
+            { code: MSPCodes.MSP_BATTERY_CONFIG, data: false },
+            { code: MSPCodes.MSP_VOLTAGE_METER_CONFIG, data: false },
+            { code: MSPCodes.MSP_CURRENT_METER_CONFIG, data: false },
+        ];
         if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_9)) {
-            await MSP.promise(MSPCodes.MSP2_SMARTFUEL_CONFIG);
+            requests.push({ code: MSPCodes.MSP2_SMARTFUEL_CONFIG, data: false });
         }
-        await MSP.promise(MSPCodes.MSP_VOLTAGE_METER_CONFIG);
-        await MSP.promise(MSPCodes.MSP_CURRENT_METER_CONFIG);
+
+        // BLE: 단일 합본 write + 미응답 코드 개별 재전송 (MSP.send_batch)
+        await MSP.batchCodes(requests);
 
         self.savedBatteryProfile = FC.BATTERY_STATE.batteryProfile;
     }

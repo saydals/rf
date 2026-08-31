@@ -1,6 +1,5 @@
 import * as config from "@/js/config.js";
 import { CONFIGURATOR } from "@/js/configurator.svelte.js";
-import { GUI } from "@/js/gui.js";
 import { serial } from "@/js/serial.js";
 
 let packet_error = $state(0);
@@ -224,7 +223,8 @@ export const MSP = {
         this.message_buffer_uint8_view = new Uint8Array(this.message_buffer);
     },
     _dispatch_message: function(expectedChecksum) {
-        if (this.message_checksum === expectedChecksum) {
+        const isValid = (this.message_checksum === expectedChecksum);
+        if (isValid) {
             // message received, store dataview
             this.dataView = new DataView(this.message_buffer, 0, this.message_length_expected);
         } else {
@@ -238,6 +238,16 @@ export const MSP = {
         for (let i = 0; i < this.callbacks.length; i++) {
             const cb = this.callbacks[i];
             if (cb && cb.code === responseCode) {
+                if (!isValid) {
+                    // CRC-error response: keep this callback registered so the
+                    // retry machinery (send_message interval / send_batch
+                    // targeted re-send) re-requests exactly this code. Resolving
+                    // it here with an empty view is what made a single corrupted
+                    // BLE frame look like a silent "success" while later codes
+                    // in a batch were never re-sent - the root of the slow/frozen
+                    // tab symptoms over BLE.
+                    continue;
+                }
                 if (typeof cb.callback === 'function') {
                     cb.callback(this.dataView);
                 }
@@ -389,7 +399,9 @@ export const MSP = {
                 return;
             }
 
-             // BLE: setInterval 기반 재전송 (transmitting 상태 확인 포함)
+             // BLE: setInterval 기반 재전송 (transmitting 상태 확인 포함).
+             // CRC로 의심되는 응답이 오면 `_dispatch_message` 가 callback 을
+             // 해소하지 않으므로, 이 인터벌이 정확히 그 명령만 재전송한다.
              const retryInterval = (config.get('bleRetryInterval') ?? 2) * 1000;
              obj.timer = setInterval(function () {
                  if (!serial.connected || CONFIGURATOR.cliEngineActive) {
@@ -407,21 +419,23 @@ export const MSP = {
                  }
                  serial.send(bufferOut, false);
              }, retryInterval);
-
-             // 무한로딩 방지: 응답이 전혀 돌아오지 않으면(패킷 유실 등) 타임아웃 후
-             // 콜백을 해제하고 오류 콜백을 호출해 호출부 promise 가 reject 되도록 한다.
-             // 기본값은 20초 — BLE 응답이 느린 디바이스에서도 정상 응답을 받을 수 있도록
-             // 충분히 긴 값으로 설정. 사용자가 옵션 탭에서 조절 가능.
-             const requestTimeoutMs = (config.get('bleRequestTimeoutMs') ?? 20) * 1000;
-             obj.timeout = setTimeout(function () {
-                 const idx = MSP.callbacks.indexOf(obj);
-                 if (idx === -1) return;
-                 MSP.callbacks.splice(idx, 1);
-                 if (obj.timer) { clearInterval(obj.timer); obj.timer = null; }
-                 console.warn('MSP request timeout (code=' + code + '), giving up');
-                 if (doCallbackOnError) obj.callback?.();
-             }, requestTimeoutMs);
         }
+
+        // 무한로딩 방지: 응답이 전혀 돌아오지 않으면(패킷 유실, 일부 FC 미지원
+        // 명령 등) 타임아웃 후 콜백을 해제한다. `!requestExists` 여부와 무관하게
+        // 등록되는 모든 콜백에 적용한다 — 부착(attach)된 콜백만 타임아웃이 없으면
+        // 해당 코드가 영영 응답하지 않을 때 탭 로드가 영구히 멈출 수 있다.
+        // 기본값 20초 — BLE 응답이 느린 디바이스에서도 정상 응답을 받을 수 있도록
+        // 충분히 긴 값. 사용자가 옵션 탭에서 조절 가능.
+        const requestTimeoutMs = (config.get('bleRequestTimeoutMs') ?? 20) * 1000;
+        obj.timeout = setTimeout(function () {
+            const idx = MSP.callbacks.indexOf(obj);
+            if (idx === -1) return;
+            MSP.callbacks.splice(idx, 1);
+            if (obj.timer) { clearInterval(obj.timer); obj.timer = null; }
+            console.warn('MSP request timeout (code=' + code + '), giving up');
+            if (doCallbackOnError) obj.callback?.();
+        }, requestTimeoutMs);
 
         MSP.callbacks.push(obj);
 
@@ -485,7 +499,7 @@ export const MSP = {
                         results.push(r);
                         loaded++;
                         fireProgress();
-                    } catch (e) {
+                    } catch {
                         results.push(null);
                         loaded++;
                         fireProgress();
@@ -498,18 +512,22 @@ export const MSP = {
             return true;
         }
 
-        const toSend = [];
-        const batchSeenCodes = new Set();
         const promises = [];
+        // Per-code pending state. Plain object (not SvelteMap): this is purely
+        // internal bookkeeping for the batch, not reactive UI state.
+        // code -> { code, bufferOut, obj, retries, promise }
+        const batchPending = {};
 
         for (const req of requests) {
             const code = req.code;
             const data = req.data || false;
             const bufferOut = (code <= 254) ? self.encode_message_v1(code, data) : self.encode_message_v2(code, data);
 
-            let requestExists = false;
-            for (const value of MSP.callbacks) {
-                if (value.code === code) { requestExists = true; break; }
+            // Duplicate request inside the batch: share the promise of the
+            // first occurrence so every caller resolves with the same value.
+            if (batchPending[code]) {
+                promises.push(batchPending[code].promise);
+                continue;
             }
 
             const obj = {
@@ -518,92 +536,128 @@ export const MSP = {
                 callback: false,
                 timer: false,
                 callbackOnError: false,
+                // Retry budget (per code). A batch must finish, so unlike
+                // `send_message`'s unbounded interval we bound it.
+                retries: 0,
+                maxRetries: (config.get('bleBatchMaxRetries') ?? 3),
             };
 
+            const entry = { code, bufferOut, obj, retries: 0, promise: null };
+            batchPending[code] = entry;
             MSP.callbacks.push(obj);
 
-            const shouldSend = (data || !requestExists) && !batchSeenCodes.has(code);
-            if (shouldSend) {
-                toSend.push(bufferOut);
-                batchSeenCodes.add(code);
-            }
-
-            promises.push(new Promise((resolve) => {
+            entry.promise = new Promise((resolve) => {
                 obj.callback = function(_data) {
+                    // Mark resolved (null) instead of deleting the key — the
+                    // code list stays stable while entries are filtered out.
+                    batchPending[code] = null;
                     loaded++;
                     fireProgress();
                     resolve(_data);
                 };
-            }));
+            });
+            promises.push(entry.promise);
         }
 
-        if (toSend.length > 0) {
-            const totalLen = toSend.reduce((sum, buf) => sum + buf.byteLength, 0);
-            const combined = new Uint8Array(totalLen);
+        // Give up on a code (retry budget exhausted or global batch timeout):
+        // resolve it with an empty DataView - same semantic as send_message's
+        // "give up" path - so its caller can proceed instead of hanging.
+        function giveUpCode(entry) {
+            batchPending[entry.code] = null;
+            const idx = MSP.callbacks.indexOf(entry.obj);
+            if (idx !== -1) { MSP.callbacks.splice(idx, 1); }
+            if (entry.obj.timer) { clearInterval(entry.obj.timer); entry.obj.timer = null; }
+            if (entry.obj.timeout) { clearTimeout(entry.obj.timeout); entry.obj.timeout = null; }
+            // entry.obj.callback() performs loaded++/fireProgress()/resolve().
+            entry.obj.callback(new DataView(new ArrayBuffer(0)));
+        }
+
+        function combineFrames(entries) {
+            let total = 0;
+            for (const e of entries) total += e.bufferOut.byteLength;
+            if (total === 0) return null;
+            const combined = new Uint8Array(total);
             let offset = 0;
-            for (const buf of toSend) {
-                combined.set(new Uint8Array(buf), offset);
-                offset += buf.byteLength;
+            for (const e of entries) {
+                combined.set(new Uint8Array(e.bufferOut), offset);
+                offset += e.bufferOut.byteLength;
             }
-
-            // BLE 재전송 간격 옵션 (기본값 2초)
-            const batchRetryInterval = (config.get('bleRetryInterval') ?? 2) * 1000;
-            function batchSend() {
-                if (!serial.connected || CONFIGURATOR.cliEngineActive) return;
-                
-                // 배치에 포함된 코드들의 콜백이 모두 처리되었으면 재전송 중지
-                const hasPending = MSP.callbacks.some(function(cb) {
-                    return batchSeenCodes.has(cb.code);
-                });
-                if (!hasPending) return;
-                
-                serial.send(combined.buffer, function (sendInfo) {
-                    if (sendInfo.bytesSent !== combined.byteLength) {
-                        console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + combined.byteLength);
-                    }
-                });
-                setTimeout(batchSend, batchRetryInterval);
-            }
-            setTimeout(batchSend, 0);
+            return combined;
         }
 
-        // Per-request timeout for the whole batch. Was hardcoded to 5000ms
-        // which is too short for slow BLE links where a response can
-        // legitimately take tens of seconds. Now honours the same
-        // `bleRequestTimeoutMs` option used by single MSP requests. If a
-        // per-request timeout fires we still keep waiting for the actual
-        // responses (so the caller does not get an "empty batch" while data
-        // is still in flight), but the allCallback is no longer silently
-        // called with an empty array.
-        const perRequestTimeoutMs = (config.get('bleRequestTimeoutMs') ?? 20) * 1000;
-        Promise.all(promises.map(function(p) {
-            return Promise.race([
-                p,
-                new Promise(function(_, reject) {
-                    setTimeout(function() {
-                        reject(new Error('MSP batch response timeout (per-request ' + perRequestTimeoutMs + 'ms)'));
-                    }, perRequestTimeoutMs);
-                })
-            ]);
-        })).then(function(results) {
+        // BLE 재전송 간격 옵션 (기본값 2초)
+        const batchRetryInterval = (config.get('bleRetryInterval') ?? 2) * 1000;
+
+        // Targeted retry loop: re-sends ONLY the codes that have not yet
+        // produced a checksum-valid response. Codes that already answered are
+        // never requested again.
+        function batchSend() {
+            if (!serial.connected || CONFIGURATOR.cliEngineActive) return;
+
+            // Drop codes that exceeded their retry budget.
+            for (const entry of Object.values(batchPending).filter(Boolean)) {
+                if (entry.retries >= entry.obj.maxRetries) giveUpCode(entry);
+            }
+
+            const pendingEntries = Object.values(batchPending).filter(Boolean);
+            if (!pendingEntries.length) return;
+
+            // Rebuild the payload from ONLY the still-pending codes.
+            const payload = combineFrames(pendingEntries);
+            if (!payload) return;
+
+            for (const entry of pendingEntries) entry.retries++;
+
+            console.log('MSP batch retry: re-sending ' + payload.byteLength + 'B for codes [' +
+                pendingEntries.map((e) => e.code).join(', ') + ']');
+            serial.send(payload.buffer, function (sendInfo) {
+                if (sendInfo.bytesSent !== payload.byteLength) {
+                    console.error('BLE batch send partial: ' + sendInfo.bytesSent + '/' + payload.byteLength);
+                }
+            });
+            setTimeout(batchSend, batchRetryInterval);
+        }
+
+        // Initial combined send: one BLE write for every code this batch owns.
+        // Codes already in flight from another send_message keep their own
+        // retry and are picked up by batchSend on the next tick instead.
+        const firstEntries = Object.values(batchPending).filter((entry) => {
+            if (!entry) return false;
+            for (const value of MSP.callbacks) {
+                if (value.code === entry.code && value !== entry.obj) return false;
+            }
+            return true;
+        });
+        const initialPayload = combineFrames(firstEntries);
+        if (initialPayload) {
+            serial.send(initialPayload.buffer, function (sendInfo) {
+                if (sendInfo.bytesSent !== initialPayload.byteLength) {
+                    console.error('BLE batch initial send partial: ' + sendInfo.bytesSent + '/' + initialPayload.byteLength);
+                }
+            });
+        }
+        // Start the targeted retry loop: fires every batchRetryInterval until
+        // every code has answered or given up.
+        setTimeout(batchSend, batchRetryInterval);
+
+        // Guarantee the batch completes even when a code never answers on a
+        // lossy link: after bleRequestTimeoutMs, every code still pending is
+        // resolved empty and the batch finishes (no permanent freeze).
+        const batchTimeoutMs = (config.get('bleRequestTimeoutMs') ?? 20) * 1000;
+        const settleTimer = setTimeout(function() {
+            for (const entry of Object.values(batchPending).filter(Boolean)) giveUpCode(entry);
+        }, batchTimeoutMs);
+
+        Promise.all(promises).then(function(results) {
+            clearTimeout(settleTimer);
             if (allCallbackCalled) return;
             allCallbackCalled = true;
             if (allCallback) allCallback(results);
         }).catch(function(err) {
             console.error('MSP batch error:', err);
-            // Fall through and wait for the real responses to arrive rather
-            // than signalling "done" with an empty results array. This
-            // prevents the loading popup from closing prematurely when BLE
-            // is slow.
-            Promise.all(promises).then(function(results) {
-                if (allCallbackCalled) return;
-                allCallbackCalled = true;
-                if (allCallback) allCallback(results);
-            }).catch(function() {
-                if (allCallbackCalled) return;
-                allCallbackCalled = true;
-                if (allCallback) allCallback([]);
-            });
+            if (allCallbackCalled) return;
+            allCallbackCalled = true;
+            if (allCallback) allCallback([]);
         });
 
         return true;
@@ -620,7 +674,7 @@ export const MSP = {
      */
     batchCodes: function (requestSpecs, options) {
         const self = this;
-        return new Promise(function(resolve, reject) {
+        return new Promise(function(resolve) {
             self.send_batch(requestSpecs, resolve, options && options.onProgress);
         });
     },
@@ -631,9 +685,14 @@ export const MSP = {
     promise: function(code, data) {
       const self = this;
       return new Promise(function(resolve) {
+        // doCallbackOnError=true: 응답이 전혀 없어 타임아웃이 나도 resolve 하여
+        // `await MSP.promise()` 가 영원히 멈추지 않도록 한다. (CRC 오류는
+        // `_dispatch_message` 가 재전송으로 처리하므로 여기 도달하는 경우는
+        // 사실상 '무응답'뿐이고, resolve(undefined) 는 기존 CRC-오류 성공
+        // 처리와 동일하게 '무시 가능' 의미를 갖는다.)
         self.send_message(code, data, false, function(_data) {
           resolve(_data);
-        });
+        }, true);
       });
     },
     callbacks_cleanup: function () {

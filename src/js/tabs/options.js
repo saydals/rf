@@ -22,6 +22,7 @@ const tab = {
       this.initBleKeepalive();
       this.initBleRetryInterval();
       this.initBleRequestTimeout();
+      this.initBleBatchMaxRetries();
       this.rememberLastSelectedBoard();
       this.showAdvancedFirmwareOpts();
       this.initAllowVerticalView();
@@ -134,6 +135,15 @@ const tab = {
       .on("change", function () {
         const val = parseInt($(this).val());
         config.set({ bleRequestTimeoutMs: val });
+      });
+  },
+
+  initBleBatchMaxRetries() {
+    $("#opt-ble-batch-max-retries")
+      .val(config.get("bleBatchMaxRetries") ?? 3)
+      .on("change", function () {
+        const val = parseInt($(this).val());
+        config.set({ bleBatchMaxRetries: val });
       });
   },
 

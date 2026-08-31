@@ -120,6 +120,17 @@
           <label for="opt-ble-request-timeout">MSP 응답 타임아웃</label>
         </div>
         <div class="field">
+          <select id="opt-ble-batch-max-retries">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+            <option value="8">8</option>
+            <option value="10">10</option>
+          </select>
+          <label for="opt-ble-batch-max-retries">배치 재전송 최대 횟수 (코드별)</label>
+        </div>
+        <div class="field">
           <div>
             <input id="opt-expert-mode" type="checkbox" class="toggle" />
           </div>

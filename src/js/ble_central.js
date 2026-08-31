@@ -244,6 +244,12 @@ export function fragmentMspFrame(data, mtu = BLE_DEFAULT_MTU) {
 
 // ─── MSP 프레임 재조립 (전송 계층 무관 — 그대로 유지) ───
 export function createMspReassembler(onCompleteFrame) {
+    // 상한을 넘는 length 는 길이 바이트 오염으로 간주한다. 실제 FC 응답은
+    // 수백 바이트 수준이며 8KB 를 넘는 프레임은 없다. (V2 는 65535B 를
+    // 허용하지만, 이 상한을 넘는 길이 주장은 오염된 length 가 후속 정상
+    // 프레임들을 가짜 payload 로 삼켜버리는 '캐스케이드 역동기' 를 일으키는
+    // 전형적인 패턴이다.)
+    const MAX_MSP_FRAME_SIZE = 8192;
     let buffer = new Uint8Array(0);
     return {
         append: function (chunk) {
@@ -275,6 +281,16 @@ export function createMspReassembler(onCompleteFrame) {
                         const size16 = buffer[6] | (buffer[7] << 8);
                         totalLen = 9 + size16;
                     } else break;
+                }
+                if (totalLen > MAX_MSP_FRAME_SIZE) {
+                    // 길이 바이트 오염: 이 후보 프레임 시작을 버리고 다음
+                    // 유사한 프레임 시작 지점을 찾아 리싱크한다. 이렇게 하지
+                    // 않으면 오염된 길이만큼 버퍼를 계속 기다렸다가, 도착한
+                    // 정상 프레임 여러 개를 한꺼번에 삼켜버리는 동작이 발생한다.
+                    console.warn('[MSP REASSEMBLER] implausible frame length ' + totalLen +
+                        ' - resyncing (buffer ' + buffer.length + 'B)');
+                    buffer = buffer.slice(1);
+                    continue;
                 }
                 if (buffer.length >= totalLen) {
                     const frame = buffer.slice(0, totalLen);
