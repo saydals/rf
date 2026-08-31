@@ -253,7 +253,11 @@ export function createMspReassembler(onCompleteFrame) {
     let buffer = new Uint8Array(0);
     return {
         append: function (chunk) {
-            const newData = new Uint8Array(chunk);
+            // Accept ArrayBuffer, DataView, and typed-array views without
+            // accidentally consuming the view's unused backing-buffer bytes.
+            const newData = chunk instanceof ArrayBuffer
+                ? new Uint8Array(chunk)
+                : new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength);
             const combined = new Uint8Array(buffer.length + newData.length);
             combined.set(buffer);
             combined.set(newData, buffer.length);

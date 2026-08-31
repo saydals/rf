@@ -313,7 +313,18 @@ export const serial = {
                     }
                 } else {
                     // MSP mode: use reassembler as normal
-                    if (self.bleRxBuffer) self.bleRxBuffer.append(data.buffer);
+                    // Cordova/native BLE may provide a typed-array view into a
+                    // larger backing buffer. Passing only .buffer would append
+                    // bytes outside this notification and can corrupt the V1
+                    // jumbo header used by MSP_BOXNAMES (payloads are ~307B).
+                    if (self.bleRxBuffer) {
+                        const bytes = data instanceof ArrayBuffer
+                            ? new Uint8Array(data)
+                            : data instanceof Uint8Array
+                                ? data
+                                : new Uint8Array(data.buffer, data.byteOffset || 0, data.byteLength);
+                        self.bleRxBuffer.append(bytes);
+                    }
                 }
             }
         };

@@ -511,19 +511,31 @@ MspHelper.prototype.process_data = function(dataHandler) {
             }
 
             case MSPCodes.MSP_BOXNAMES: {
-                FC.AUX_CONFIG = []; // empty the array as new data is coming in
-
+                // Rotorflight serializes BOXNAMES as a page of
+                // "name;name;..." strings. Page 0 can be a V1 jumbo payload
+                // (normally ~307 bytes), so an empty/partial response must not
+                // erase a previously valid list.
+                const names = [];
                 let buff = [];
                 for (let i = 0; i < data.byteLength; i++) {
                     const char = data.readU8();
                     if (char == 0x3B) { // ; (delimeter char)
-                        FC.AUX_CONFIG.push(String.fromCharCode.apply(null, buff)); // convert bytes into ASCII and save as strings
-
-                        // empty buffer
+                        names.push(String.fromCharCode.apply(null, buff));
                         buff = [];
                     } else {
                         buff.push(char);
                     }
+                }
+                // Be tolerant of a firmware/transport implementation that
+                // omits the final delimiter, but reject a genuinely empty or
+                // truncated response.
+                if (buff.length) {
+                    names.push(String.fromCharCode.apply(null, buff));
+                }
+                if (names.length) {
+                    FC.AUX_CONFIG = names;
+                } else {
+                    console.warn('[MSP_BOXNAMES] empty response; keeping existing names');
                 }
                 break;
             }

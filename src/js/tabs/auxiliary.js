@@ -29,8 +29,12 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
+        // Rotorflight serves BOXNAMES/BOXIDS in paged replies. Request page 0
+        // explicitly so the mode tab does not depend on the post-connect
+        // request having succeeded over BLE.
         MSP.batchCodes([
-            { code: MSPCodes.MSP_BOXIDS, data: false },
+            { code: MSPCodes.MSP_BOXNAMES, data: new Uint8Array([0]) },
+            { code: MSPCodes.MSP_BOXIDS, data: new Uint8Array([0]) },
             { code: MSPCodes.MSP_MODE_RANGES, data: false },
             { code: MSPCodes.MSP_MODE_RANGES_EXTRA, data: false },
         ]).then(() => callback?.());
