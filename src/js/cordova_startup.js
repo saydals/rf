@@ -47,6 +47,12 @@ export const cordovaUI = {
         } else {
             $('body').css('zoom', 1);
         }
+        this.applyVerticalIconScale();
+    },
+    applyVerticalIconScale: function() {
+        const scale = parseFloat(config.get('verticalViewIconSize') ?? 1);
+        const clamped = Math.min(Math.max(scale, 1), 3);
+        document.documentElement.style.setProperty('--vertical-icon-scale', clamped);
     },
 };
 

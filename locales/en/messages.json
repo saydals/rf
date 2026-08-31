@@ -6033,6 +6033,9 @@
     "options.allowVerticalView.label": {
         "message": "Allow vertical (portrait) view"
     },
+    "options.verticalViewIconSize.label": {
+        "message": "Vertical View Icon Size"
+    },
     "osdSetupTitle": {
         "message": "OSD"
     },

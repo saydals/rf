@@ -14,6 +14,7 @@ const tab = {
     $("#content").load("/src/tabs/options.html", () => {
       i18n.localizePage();
 
+      this.initUserLanguage();
       this.initRememberLastTab();
       this.initCheckForConfiguratorUnstableVersions();
       this.initAutoConnectConnectionTimeout();
@@ -26,6 +27,7 @@ const tab = {
       this.rememberLastSelectedBoard();
       this.showAdvancedFirmwareOpts();
       this.initAllowVerticalView();
+      this.initVerticalViewIconSize();
       this.initHideConnectedTabs();
       this.initExpertMode();
 
@@ -35,6 +37,31 @@ const tab = {
 
   cleanup(callback) {
     callback?.();
+  },
+
+  initUserLanguage() {
+    const select = $("#opt-user-language");
+    const supported = i18n.getLanguagesAvailables();
+    const current = i18n.selectedLanguage ?? 'DEFAULT';
+
+    const options = [
+      { value: 'DEFAULT', label: i18n.getMessage('language_default_pretty') },
+      ...supported.map((lng) => ({
+        value: lng,
+        label: i18n.getMessage(`language_${lng}`),
+      })),
+    ];
+
+    select.empty();
+    options.forEach((opt) => {
+      select.append($('<option></option>').attr('value', opt.value).text(opt.label));
+    });
+    select.val(current);
+
+    select.on("change", function () {
+      i18n.changeLanguage($(this).val());
+      i18n.localizePage(true);
+    });
   },
 
   initRememberLastTab() {
@@ -155,6 +182,19 @@ const tab = {
         config.set({ allowVerticalView: checked });
         globalThis.cordovaUI?.set?.();
       });
+  },
+
+  initVerticalViewIconSize() {
+    const select = $("#opt-vertical-icon-size");
+    const current = config.get("verticalViewIconSize") ?? 1;
+
+    select.val(current);
+
+    select.on("change", function () {
+      const scale = parseFloat($(this).val());
+      config.set({ verticalViewIconSize: scale });
+      globalThis.cordovaUI?.applyVerticalIconScale?.(scale);
+    });
   },
 
   initHideConnectedTabs() {

@@ -5,6 +5,10 @@
         <div class="spacer_box_title" i18n="tabOptions"></div>
       </div>
       <div class="spacer field-container">
+        <div class="field language-select-wide">
+          <select id="opt-user-language"></select>
+          <label for="opt-user-language" i18n="language_choice_message"></label>
+        </div>
         <div class="field">
           <div>
             <input
@@ -84,14 +88,14 @@
         </div>
         <div class="field">
           <select id="opt-ble-keepalive">
-            <option value="0" i18n="off"></option>
+            <option value="0">Off</option>
             <option value="10">10s</option>
             <option value="15" selected>15s</option>
             <option value="20">20s</option>
             <option value="30">30s</option>
             <option value="60">60s</option>
           </select>
-          <label for="opt-ble-keepalive">BLE Keepalive Interval</label>
+          <label for="opt-ble-keepalive">BLE Keepalive Interval (default: 15s)</label>
         </div>
         <div class="field">
           <select id="opt-ble-retry-interval">
@@ -105,7 +109,7 @@
             <option value="8">8s</option>
             <option value="9">9s</option>
           </select>
-          <label for="opt-ble-retry-interval">BLE 재전송 요청 간격</label>
+          <label for="opt-ble-retry-interval">BLE Retry Request Interval (default: 2s)</label>
         </div>
         <div class="field">
           <select id="opt-ble-request-timeout">
@@ -117,7 +121,7 @@
             <option value="45">45s</option>
             <option value="60">60s</option>
           </select>
-          <label for="opt-ble-request-timeout">MSP 응답 타임아웃</label>
+          <label for="opt-ble-request-timeout">MSP Response Timeout (default: 20s)</label>
         </div>
         <div class="field">
           <select id="opt-ble-batch-max-retries">
@@ -128,7 +132,17 @@
             <option value="8">8</option>
             <option value="10">10</option>
           </select>
-          <label for="opt-ble-batch-max-retries">배치 재전송 최대 횟수 (코드별)</label>
+          <label for="opt-ble-batch-max-retries">Max Batch Retries (default: 3)</label>
+        </div>
+        <div class="field">
+          <select id="opt-vertical-icon-size">
+            <option value="1" selected>x1</option>
+            <option value="1.5">x1.5</option>
+            <option value="2">x2</option>
+            <option value="2.5">x2.5</option>
+            <option value="3">x3</option>
+          </select>
+          <label for="opt-vertical-icon-size">Vertical View Icon Size (default: x1)</label>
         </div>
         <div class="field">
           <div>

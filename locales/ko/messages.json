@@ -278,6 +278,10 @@
         "message": "세로(포트레이트) 보기 허용",
         "english": "Allow vertical (portrait) view"
     },
+    "options.verticalViewIconSize.label": {
+        "message": "세로 보기 아이콘 크기",
+        "english": "Vertical View Icon Size"
+    },
     "sensorDataFlashNotFound": {
         "message": "데이터플래시 <br>칩이 발견되지 않음",
         "english": "No dataflash <br>chip found",

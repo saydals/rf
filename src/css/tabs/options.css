@@ -20,6 +20,19 @@
   width: 100%;
 }
 
+.tab-options .field.language-select-wide {
+  display: block;
+}
+
+.tab-options .field.language-select-wide select {
+  max-width: 400px;
+}
+
+.tab-options .field.language-select-wide label {
+  display: block;
+  margin-top: 4px;
+}
+
 .tab-options .show-tabs-box {
   grid-column: 1 / -1;
   display: block;

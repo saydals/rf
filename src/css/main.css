@@ -1340,6 +1340,10 @@ input[type="number"]::-webkit-inner-spin-button {
     regardless of resolution so the layout stays consistent. The hamburger side
     drawer is disabled in portrait because the bar is already icon-only. **/
 @media all and (orientation: portrait) {
+    :root {
+        --vertical-icon-scale: 1;
+    }
+
     .tab_container {
         position: fixed;
         z-index: 2000;
@@ -1348,7 +1352,7 @@ input[type="number"]::-webkit-inner-spin-button {
         right: 0;
         bottom: 0;
         width: auto;
-        height: calc(48px + env(safe-area-inset-bottom, 0px));
+        height: calc(var(--vertical-icon-scale, 1) * 48px + env(safe-area-inset-bottom, 0px));
         border-right: none;
         border-top: 1px solid var(--color-border);
         background-color: var(--color-surface);
@@ -1371,7 +1375,7 @@ input[type="number"]::-webkit-inner-spin-button {
         display: flex;
         flex-direction: row;
         align-items: stretch;
-        height: 48px;
+        height: calc(var(--vertical-icon-scale, 1) * 48px);
         overflow-x: auto;
         overflow-y: hidden;
         white-space: nowrap;
@@ -1402,16 +1406,16 @@ input[type="number"]::-webkit-inner-spin-button {
 
     #tabs li a {
         display: block;
-        width: 44px;
-        height: 48px;
-        line-height: 48px;
+        width: calc(var(--vertical-icon-scale, 1) * 44px);
+        height: calc(var(--vertical-icon-scale, 1) * 48px);
+        line-height: calc(var(--vertical-icon-scale, 1) * 48px);
         padding: 0;
         font-size: 0;
         text-overflow: clip;
     }
 
     .tabicon {
-        background-size: 22px;
+        background-size: calc(var(--vertical-icon-scale, 1) * 22px);
         background-position: center;
     }
 
@@ -1441,27 +1445,27 @@ input[type="number"]::-webkit-inner-spin-button {
 
     /* Content area: compact header + bottom bar height */
     #tab-content-container {
-        height: calc(100% - 56px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 56px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     #tab-content-container.logopen {
-        height: calc(100% - 56px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 56px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     #tab-content-container.header_expanded {
-        height: calc(100% - 154px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 154px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     #tab-content-container.header_expanded2 {
-        height: calc(100% - 118px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 118px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     #tab-content-container.logopen.header_expanded {
-        height: calc(100% - 154px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 154px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     #tab-content-container.logopen.header_expanded2 {
-        height: calc(100% - 118px - 48px - env(safe-area-inset-bottom, 0px));
+        height: calc(100% - 118px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
     /* Reveal keeps the same icon-only bottom bar (no tab names in portrait) */
@@ -1471,7 +1475,7 @@ input[type="number"]::-webkit-inner-spin-button {
         top: auto;
         bottom: 0;
         width: auto;
-        height: calc(48px + env(safe-area-inset-bottom, 0px));
+        height: calc(var(--vertical-icon-scale, 1) * 48px + env(safe-area-inset-bottom, 0px));
         border-top: 1px solid var(--color-border);
         border-right: none;
         overflow: hidden;
@@ -1480,7 +1484,7 @@ input[type="number"]::-webkit-inner-spin-button {
     .tab_container.reveal #tabs {
         display: flex;
         flex-direction: row;
-        height: 48px;
+        height: calc(var(--vertical-icon-scale, 1) * 48px);
         overflow-x: auto;
         overflow-y: hidden;
         white-space: nowrap;
@@ -1493,15 +1497,15 @@ input[type="number"]::-webkit-inner-spin-button {
     }
 
     .tab_container.reveal #tabs li a {
-        width: 44px;
-        height: 48px;
-        line-height: 48px;
+        width: calc(var(--vertical-icon-scale, 1) * 44px);
+        height: calc(var(--vertical-icon-scale, 1) * 48px);
+        line-height: calc(var(--vertical-icon-scale, 1) * 48px);
         padding: 0;
         font-size: 0;
     }
 
     .tab_container.reveal .tabicon {
-        background-size: 22px;
+        background-size: calc(var(--vertical-icon-scale, 1) * 22px);
         background-position: center;
     }
 }
