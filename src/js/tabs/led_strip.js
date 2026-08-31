@@ -21,13 +21,13 @@ tab.initialize = function (callback) {
     load_data(load_html);
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_LED_STRIP_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_LED_STRIP_MODECOLOR))
-            .then(() => MSP.promise(MSPCodes.MSP_LED_COLORS))
-            .then(() => MSP.promise(MSPCodes.MSP_LED_STRIP_SETTINGS))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_LED_STRIP_CONFIG },
+            { code: MSPCodes.MSP_LED_STRIP_MODECOLOR },
+            { code: MSPCodes.MSP_LED_COLORS },
+            { code: MSPCodes.MSP_LED_STRIP_SETTINGS },
+        ]).then(() => callback());
     }
 
     function save_data(callback) {

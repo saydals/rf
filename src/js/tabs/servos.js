@@ -33,19 +33,18 @@ tab.initialize = function (callback) {
     load_data(load_html);
 
     function load_data(callback) {
-        MSP.promise(MSPCodes.MSP_STATUS)
-            .then(() => MSP.promise(MSPCodes.MSP_SERIAL_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_SERVO_CONFIGURATIONS))
-            .then(() => MSP.promise(MSPCodes.MSP_SERVO_OVERRIDE))
-            .then(() => MSP.promise(MSPCodes.MSP_SERVO))
-            .then(() => {
-                // Load bus servo config for API 12.9+
-                if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_9)) {
-                    return MSP.promise(MSPCodes.MSP_BUS_SERVO_CONFIG);
-                }
-                return Promise.resolve();
-            })
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_SERIAL_CONFIG },
+            { code: MSPCodes.MSP_SERVO_CONFIGURATIONS },
+            { code: MSPCodes.MSP_SERVO_OVERRIDE },
+            { code: MSPCodes.MSP_SERVO },
+        ]).then(() => {
+            if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_9)) {
+                return MSP.promise(MSPCodes.MSP_BUS_SERVO_CONFIG);
+            }
+            return Promise.resolve();
+        }).then(callback);
     }
 
     function save_data(callback) {

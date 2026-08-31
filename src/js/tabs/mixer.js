@@ -58,13 +58,14 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        MSP.promise(MSPCodes.MSP_STATUS)
-            .then(() => MSP.promise(MSPCodes.MSP_FEATURE_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_INPUTS))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_RULES))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_OVERRIDE))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_FEATURE_CONFIG },
+            { code: MSPCodes.MSP_MIXER_CONFIG },
+            { code: MSPCodes.MSP_MIXER_INPUTS },
+            { code: MSPCodes.MSP_MIXER_RULES },
+            { code: MSPCodes.MSP_MIXER_OVERRIDE },
+        ]).then(() => callback());
     }
 
     function save_data(callback) {

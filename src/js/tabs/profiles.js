@@ -63,17 +63,17 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_FEATURE_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_PID_TUNING))
-            .then(() => MSP.promise(MSPCodes.MSP_PID_PROFILE))
-            .then(() => MSP.promise(MSPCodes.MSP_RESCUE_PROFILE))
-            .then(() => MSP.promise(MSPCodes.MSP_GOVERNOR_PROFILE))
-            .then(() => MSP.promise(MSPCodes.MSP_GOVERNOR_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_SENSOR_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_BATTERY_CONFIG))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_FEATURE_CONFIG },
+            { code: MSPCodes.MSP_PID_TUNING },
+            { code: MSPCodes.MSP_PID_PROFILE },
+            { code: MSPCodes.MSP_RESCUE_PROFILE },
+            { code: MSPCodes.MSP_GOVERNOR_PROFILE },
+            { code: MSPCodes.MSP_GOVERNOR_CONFIG },
+            { code: MSPCodes.MSP_SENSOR_CONFIG },
+            { code: MSPCodes.MSP_BATTERY_CONFIG },
+        ]).then(() => callback());
     }
 
     function save_data(callback) {

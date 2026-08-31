@@ -262,12 +262,12 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_RC_TUNING))
-            .then(() => MSP.promise(MSPCodes.MSP_RC_CONFIG))
-            .then(() => MSP.promise(MSPCodes.MSP_MIXER_CONFIG))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_RC_TUNING },
+            { code: MSPCodes.MSP_RC_CONFIG },
+            { code: MSPCodes.MSP_MIXER_CONFIG },
+        ]).then(() => callback());
     }
 
     function save_data(callback) {

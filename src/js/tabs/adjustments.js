@@ -129,11 +129,11 @@ tab.initialize = function (callback) {
     }
 
     function load_data(callback) {
-        Promise.resolve(true)
-            .then(() => MSP.promise(MSPCodes.MSP_STATUS))
-            .then(() => MSP.promise(MSPCodes.MSP_RC))
-            .then(() => MSP.promise(MSPCodes.MSP_ADJUSTMENT_RANGES))
-            .then(callback);
+        MSP.batchCodes([
+            { code: MSPCodes.MSP_STATUS },
+            { code: MSPCodes.MSP_RC },
+            { code: MSPCodes.MSP_ADJUSTMENT_RANGES },
+        ]).then(() => callback());
     }
 
     function save_data(callback) {
