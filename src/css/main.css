@@ -1468,6 +1468,12 @@ input[type="number"]::-webkit-inner-spin-button {
         height: calc(100% - 118px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
+    /* In portrait the bottom tab bar is an icon strip, so the tab toolbar
+       must sit above it instead of sharing the same z-index. */
+    .toolbar_fixed_bottom .content_toolbar {
+        z-index: 2001;
+    }
+
     /* Reveal keeps the same icon-only bottom bar (no tab names in portrait) */
     .tab_container.reveal {
         left: 0;
