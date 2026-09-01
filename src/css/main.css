@@ -2041,9 +2041,14 @@ dialog {
 }
 
 @media all and (max-width: 575px) {
+    /* Portrait phones: keep the save status popup compact instead of
+       stretching to (almost) full window width — it only ever contains a
+       short "Saving..." / "Saved" message. */
     .dialogSaveStatus {
-        width: calc(100% - 2em);
-        border-radius: unset;
+        width: auto;
+        min-width: 14em;
+        max-width: calc(100% - 2em);
+        border-radius: 5px;
     }
 }
 
