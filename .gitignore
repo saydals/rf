@@ -42,6 +42,3 @@ release-signing.properties
 
 # Kilo agent state (local only)
 .kilo/
-
-# Build artefacts
-redist/rf-cordova.apk
