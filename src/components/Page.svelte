@@ -104,6 +104,16 @@
     }
   }
 
+  @media all and (orientation: portrait) {
+    .toolbar {
+      position: fixed;
+      bottom: calc(var(--vertical-icon-scale, 1) * 48px + env(safe-area-inset-bottom, 0px));
+      left: 0;
+      right: 0;
+      z-index: 2001;
+    }
+  }
+
   @media only screen and (max-width: 480px) {
     .content {
       margin: 0;

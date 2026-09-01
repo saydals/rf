@@ -1468,10 +1468,19 @@ input[type="number"]::-webkit-inner-spin-button {
         height: calc(100% - 118px - calc(var(--vertical-icon-scale, 1) * 48px) - env(safe-area-inset-bottom, 0px));
     }
 
-    /* In portrait the bottom tab bar is an icon strip, so the tab toolbar
-       must sit above it instead of sharing the same z-index. */
-    .toolbar_fixed_bottom .content_toolbar {
-        z-index: 2001;
+    /* NOTE: portrait rules for the legacy `.toolbar_fixed_bottom
+       .content_toolbar` Save/Revert toolbar have been moved to the bottom
+       of this file (after the base toolbar rules) so they win the CSS
+       cascade — at this position they were overridden by the base
+       `position: absolute` rule further down and the toolbar stayed
+       hidden behind the icon bar. See the `orientation: portrait` media
+       query near the end of this file. */
+
+    /* CLI expand button: also fixed above the icon bar in portrait */
+    .toolbar_expand_btn {
+        position: fixed;
+        bottom: calc(var(--vertical-icon-scale, 1) * 48px + env(safe-area-inset-bottom, 0px) + 15px);
+        z-index: 2002;
     }
 
     /* Reveal keeps the same icon-only bottom bar (no tab names in portrait) */
@@ -2288,6 +2297,35 @@ html[data-theme="dark"] .content_toolbar button:active,
 .toolbar_fixed_bottom .content_toolbar div[style='display: none;']:first-child {
     visibility: hidden;
     display: block !important;
+}
+
+/* Portrait (vertical view): the bottom tab bar is an icon strip, so the
+   Save/Revert toolbar must sit ABOVE it instead of being covered by it.
+   These rules intentionally live AFTER the base `.toolbar_fixed_bottom
+   .content_toolbar` rules above — same specificity, later declaration
+   wins, so in portrait the fixed positioning takes effect.
+   `--vertical-icon-scale` keeps the toolbar above the icon bar at any
+   icon size (1x–3x, see options tab). Applies to all legacy tabs
+   (configuration, power, servos, mixer, rates, profiles, adjustments,
+   led_strip, beepers, gps, blackbox, auxiliary/Modes) and, via the
+   second selector, to the presets tab where both classes sit on the
+   toolbar div itself. */
+@media all and (orientation: portrait) {
+    .toolbar_fixed_bottom .content_toolbar,
+    .content_toolbar.toolbar_fixed_bottom {
+        position: fixed !important;
+        bottom: calc(var(--vertical-icon-scale, 1) * 48px + env(safe-area-inset-bottom, 0px)) !important;
+        left: 0;
+        right: 0;
+        z-index: 2001;
+    }
+
+    /* toolbar is fixed in portrait, so content_wrapper no longer needs
+       the 90px bottom padding reserved for the absolute-positioned
+       toolbar */
+    .toolbar_fixed_bottom .content_wrapper {
+        height: calc(100% - 40px) !important;
+    }
 }
 
 /* Colums  START> */
