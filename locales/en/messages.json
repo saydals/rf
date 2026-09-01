@@ -176,18 +176,6 @@
     "saveStatusError": {
         "message": "Save failed"
     },
-    "tabExitTitle": {
-        "message": "Unsaved changes"
-    },
-    "tabExitMessage": {
-        "message": "Do you want to save the changes before leaving this tab?"
-    },
-    "tabExitOk": {
-        "message": "OK"
-    },
-    "tabExitNo": {
-        "message": "No"
-    },
     "autoConnectEnabled": {
         "message": "Auto-Connect: Enabled - Configurator automatically tries to connect when new port is detected"
     },

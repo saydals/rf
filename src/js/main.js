@@ -619,7 +619,9 @@ export function showSaveStatusDialog(status) {
 }
 
 export function showTabExitDialog(tab, callback) {
-    const dialog = $('.dialogTabExit')[0];
+    // The dialog markup lives in index.html (three buttons:
+    // Save Changes / Ignore Changes / Go Back).
+    const dialog = $('.dialogTabExit').first()[0];
 
     // Neither save nor revert available: nothing to ask about.
     if (!tab.save && !tab.revert) {
@@ -628,17 +630,17 @@ export function showTabExitDialog(tab, callback) {
     }
 
     // Force an explicit choice: do not let ESC/back close the dialog
-    // without continuing the tab switch.
+    // without deciding.
     $(dialog).off('cancel').on('cancel', function (e) {
         e.preventDefault();
     });
 
-    $('#tab-exit-save').off('click').on('click', function (e) {
+    // Save Changes: save the changes first (shows its own "Saving..."
+    // dialog), then continue the pending action (tab switch / profile
+    // switch) after FC acknowledgment.
+    $('.tabExitSaveBtn', dialog).off('click').on('click', function (e) {
         e.preventDefault();
         dialog.close();
-        // OK: save the changes first, then continue the pending action
-        // (tab switch / profile switch). tab.save() shows its own
-        // "Saving..." dialog and continues on FC acknowledgment.
         if (tab.save) {
             tab.save(() => callback?.());
         } else {
@@ -646,11 +648,20 @@ export function showTabExitDialog(tab, callback) {
         }
     });
 
-    $('#tab-exit-no').off('click').on('click', function (e) {
+    // Ignore Changes: discard the changes and just continue.
+    $('.tabExitRevertBtn', dialog).off('click').on('click', function (e) {
         e.preventDefault();
         dialog.close();
-        // No: discard the changes and just continue.
         tab.revert?.(() => callback?.());
+    });
+
+    // Go Back: stay on the current tab. Simply do not invoke the
+    // callback — the pending tab switch is aborted. No flags need
+    // resetting: tab_switch_in_progress is only raised inside the
+    // callback itself.
+    $('.tabExitCancelBtn', dialog).off('click').on('click', function (e) {
+        e.preventDefault();
+        dialog.close();
     });
 
     dialog.showModal();
