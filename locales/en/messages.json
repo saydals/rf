@@ -162,6 +162,15 @@
     "dialogTabExitCancel": {
         "message": "Go Back"
     },
+    "saveStatusSaving": {
+        "message": "Saving settings to FC..."
+    },
+    "saveStatusSuccess": {
+        "message": "Save successful!"
+    },
+    "saveStatusError": {
+        "message": "Save failed"
+    },
     "autoConnectEnabled": {
         "message": "Auto-Connect: Enabled - Configurator automatically tries to connect when new port is detected"
     },

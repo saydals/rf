@@ -1980,6 +1980,54 @@ dialog {
     }
 }
 
+.dialogSaveStatus {
+    width: 30em;
+    border-radius: 5px;
+}
+
+.dialogSaveStatus .content {
+    margin-top: 8px;
+}
+
+.dialogSaveStatus.saving #save-status-title {
+    color: #000;
+}
+
+.dialogSaveStatus.saving #save-status-message {
+    color: #333;
+}
+
+.dialogSaveStatus.success {
+    border-color: #28a745;
+}
+
+.dialogSaveStatus.success #save-status-title {
+    color: #28a745;
+}
+
+.dialogSaveStatus.success #save-status-message {
+    color: #155724;
+}
+
+.dialogSaveStatus.error {
+    border-color: #dc3545;
+}
+
+.dialogSaveStatus.error #save-status-title {
+    color: #dc3545;
+}
+
+.dialogSaveStatus.error #save-status-message {
+    color: #721c24;
+}
+
+@media all and (max-width: 575px) {
+    .dialogSaveStatus {
+        width: calc(100% - 2em);
+        border-radius: unset;
+    }
+}
+
 dialog .dialog_toolbar .btn a {
     /*  common styles for content toolbar buttons */
     margin-top: 0;

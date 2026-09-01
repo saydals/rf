@@ -557,13 +557,65 @@ export function generateFilename(prefix, suffix) {
 export function showErrorDialog(message) {
    const dialog = $('.dialogError')[0];
 
-    $('.dialogError-content').html(message);
+   $('.dialogError-content').html(message);
 
-    $('.dialogError-closebtn').click(function() {
-        dialog.close();
-    });
+   $('.dialogError-closebtn').click(function() {
+       dialog.close();
+   });
 
-    dialog.showModal();
+   dialog.showModal();
+}
+
+export function showSaveStatusDialog(status) {
+    const dialog = $('.dialogSaveStatus')[0];
+    const title = $('#save-status-title');
+    const message = $('#save-status-message');
+
+    dialog.classList.remove('saving', 'success', 'error');
+
+    if (status === 'saving') {
+        title.text(i18n.getMessage('saveStatusSaving'));
+        message.text('');
+        dialog.classList.add('saving');
+        dialog.showModal();
+        return {
+            success: function() {
+                dialog.classList.remove('saving');
+                dialog.classList.add('success');
+                title.text(i18n.getMessage('saveStatusSuccess'));
+                message.text('');
+                setTimeout(function() {
+                    dialog.close();
+                }, 1500);
+            },
+            error: function() {
+                dialog.classList.remove('saving');
+                dialog.classList.add('error');
+                title.text(i18n.getMessage('saveStatusError'));
+                message.text('');
+                dialog.showModal();
+            },
+        };
+    }
+
+    if (status === 'success') {
+        dialog.classList.add('success');
+        title.text(i18n.getMessage('saveStatusSuccess'));
+        message.text('');
+        dialog.showModal();
+        setTimeout(function() {
+            dialog.close();
+        }, 1500);
+        return;
+    }
+
+    if (status === 'error') {
+        dialog.classList.add('error');
+        title.text(i18n.getMessage('saveStatusError'));
+        message.text('');
+        dialog.showModal();
+        return;
+    }
 }
 
 export function showTabExitDialog(tab, callback) { return tab.revert(callback); }

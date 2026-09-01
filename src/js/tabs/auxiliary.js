@@ -10,6 +10,7 @@ import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
 import { bit_check } from "@/js/serial_backend.js";
 import { getTextWidth } from "@/js/utils/common.js";
+import { showSaveStatusDialog } from "@/js/main.js";
 
 import { TABS } from "./tabs.js";
 
@@ -41,10 +42,12 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         mspHelper.sendModeRanges(eeprom_write);
 
         function eeprom_write() {
             MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, function () {
+                saveDialog.success();
                 GUI.log(i18n.getMessage('eepromSaved'));
                 callback?.();
             });
