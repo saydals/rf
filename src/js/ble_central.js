@@ -274,7 +274,7 @@ export function createMspReassembler(onCompleteFrame) {
                     const sizeByte = buffer[3];
                     if (sizeByte === 0xFF) {
                         if (buffer.length >= 9) {
-                            const size16 = buffer[4] | (buffer[5] << 8);
+                            const size16 = buffer[5] | (buffer[6] << 8);
                             totalLen = 8 + size16;
                         } else break;
                     } else {
