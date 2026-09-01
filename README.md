@@ -18,9 +18,13 @@ The latest Android APK build is available here:
 
 **Notes**
 
-> When connecting to a BLE module such as SpeedyBee, a "Data loading" popup may appear; depending on the situation it can take anywhere from a few seconds to tens of seconds. While background data is still being received, touching the screen will simply dismiss it. Force-closing it and then switching tabs greatly increases the risk of a crash. BLE module speeds vary — SpeedyBee is a module optimized for Betaflight, so for Rotorflight we recommend using a different BLE module instead. SPP remains the better choice.
+> When connecting to a BLE module such as SpeedyBee, a "Data loading" popup may appear; depending on the situation it can take anywhere from a few seconds ~~to tens of seconds~~. While background data is still being received, touching the screen will simply dismiss it. Force-closing it and then switching tabs greatly increases the risk of a crash. BLE module speeds vary — SpeedyBee is a module optimized for Betaflight, so for Rotorflight we recommend using a different BLE module instead. SPP remains the better choice.
 >
-> 2026-9-1 일 패치로 BLE 속도가 SPP에 근접하게 빨라졌습니다.  
+> 2026-9-1
+>
+> The BLE speed has improved to nearly match SPP. We have also fixed many bugs.
+>
+> 
 
 The actual core functionality is unchanged — only the connection part and the UI were modified, so there should be no functional errors. To make better use of the narrow screen, unnecessary elements are hidden.
 
