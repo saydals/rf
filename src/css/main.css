@@ -1734,15 +1734,15 @@ li.active .ic_cli {
 }
 
 .ic_connect {
-    background-image: url(/images/icons/cf_icon_connect_grey.svg);
+    background-image: url(/images/icons/connect_icon.svg);
 }
 
 .ic_connect:hover {
-    background-image: url(/images/icons/cf_icon_connect_white.svg);
+    background-image: url(/images/icons/connect_icon.svg);
 }
 
 li.active .ic_connect {
-    background-image: url(/images/icons/cf_icon_connect_white.svg);
+    background-image: url(/images/icons/connect_icon.svg);
 }
 
 .ic_motor {
