@@ -1,4 +1,5 @@
 import * as config from '@/js/config.js';
+import { CONFIGURATOR } from '@/js/configurator.svelte.js';
 import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
@@ -157,7 +158,7 @@ PortHandler.check_usb_devices = function (callback) {
                     data: {isDFU: true},
                 }));
 
-                if (import.meta.env.DEV) {
+                if (import.meta.env.DEV || config.get('virtualTestMode') || CONFIGURATOR.virtualMode) {
                     self.portPickerElement.append($('<option/>', {
                        value: 'virtual',
                        text: i18n.getMessage('portsSelectVirtual'),
@@ -316,7 +317,7 @@ PortHandler.updatePortSelect = function (ports) {
         }));
     }
 
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || config.get('virtualTestMode') || CONFIGURATOR.virtualMode) {
         this.portPickerElement.append($("<option/>", {
            value: 'virtual',
            text: i18n.getMessage('portsSelectVirtual'),

@@ -607,6 +607,10 @@ export const serial = {
                 });
             } else {
                 self.connectionId = false;
+                // The flag means "current connection is virtual", so it must
+                // always be false while disconnected. The virtual FC entry
+                // stays in the device list via the config check in
+                // normalizeSerial() / PortHandler, not via this flag.
                 CONFIGURATOR.virtualMode = false;
                 self.connectionType = false;
                 if (callback) {

@@ -69,9 +69,14 @@ export async function handleConnectClick() {
                     }
                 }, 15000);
 
-                if (CONFIGURATOR.virtualMode || selectedPort.data().isVirtual) {
+                // Branch purely on the selected port — never on
+                // CONFIGURATOR.virtualMode, which only reflects the
+                // *current* connection. Otherwise, with virtual test mode
+                // enabled in options, real FC connections (SPP/BLE/serial)
+                // would wrongly be routed to the virtual backend.
+                if (selectedPort.data()?.isVirtual || portName === 'virtual') {
                     CONFIGURATOR.virtualMode = true;
-                    if (selectedPort.data().isVirtual) {
+                    if (selectedPort.data()?.isVirtual) {
                         CONFIGURATOR.virtualApiVersion = $('#firmware-version-dropdown :selected').val();
                         CONFIGURATOR.virtualFwVersion = $('#firmware-version-dropdown :selected').data('fw');
                     } else {
@@ -81,9 +86,14 @@ export async function handleConnectClick() {
 
                     serial.connect('virtual', {}, onOpenVirtual);
                 } else if (selectedPort.data().isBLE) {
+                    // Real BLE FC: clear any stale virtual flag so MSP and
+                    // the rest of the backend talk to the real device.
+                    CONFIGURATOR.virtualMode = false;
                     // BLE 연결 (baudrate 불필요)
                     serial.connect(portName, {}, onOpen);
                 } else {
+                    // Real serial/SPP FC
+                    CONFIGURATOR.virtualMode = false;
                     serial.connect(portName, {bitrate: selected_baud}, onOpen);
                 }
             } else {
@@ -440,6 +450,9 @@ function onOpenVirtual() {
     update_dataflash_global();
     sensor_status(FC.CONFIG.activeSensors);
     updateTabList(FC.FEATURE_CONFIG.features);
+
+    // Reflect the connected state in the Connect tab UI immediately
+    TABS.connect?.sync?.();
 }
 
 function abortConnect() {

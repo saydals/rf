@@ -5,6 +5,7 @@ import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
 import { checkForConfiguratorUpdates, setDarkTheme } from "@/js/main.js";
 import { serial } from "@/js/serial.js";
+import { PortHandler } from "@/js/port_handler.js";
 
 import { TABS } from "./tabs.js";
 
@@ -72,7 +73,14 @@ const tab = {
       .on("change", function () {
         const checked = $(this).is(":checked");
         config.set({ virtualTestMode: checked });
-        CONFIGURATOR.virtualMode = checked;
+        // NOTE: do NOT touch CONFIGURATOR.virtualMode here — that flag only
+        // reflects whether the *current connection* is virtual. Enabling the
+        // option just persists the setting; PortHandler and normalizeSerial
+        // read it from config, and the flag is set when a virtual FC is
+        // actually connected.
+        // Refresh the port picker so the virtual FC entry appears in /
+        // disappears from the Connect tab device list immediately.
+        PortHandler.check_serial_devices();
       });
   },
 

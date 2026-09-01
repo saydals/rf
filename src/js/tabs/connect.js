@@ -120,12 +120,29 @@ function connectToDevice(device) {
     collapseHeader();
 
     if (device.path === 'virtual') {
-        $('#port').val('virtual').trigger('change');
+        CONFIGURATOR.virtualMode = true;
+
+        // The 'virtual' option may not exist in production builds
+        // (PortHandler only appends it when virtual test mode is enabled).
+        // Ensure it is present before selecting it, otherwise .val()
+        // silently fails and the connect flow targets a real port.
+        const $port = $('#port');
+        if (!$port.find('option[value="virtual"]').length) {
+            $port.append($('<option/>', {
+                value: 'virtual',
+                text: i18n.getMessage('portsSelectVirtual'),
+                data: { isVirtual: true },
+            }));
+        }
+        $port.val('virtual').trigger('change');
     } else {
         // 'manual' + port-override accepts every transport: a raw serial path,
         // 'spp:<address>' and 'ble:<address>' (see serial.connect).
         $('#port-override').val(device.path).trigger('change');
         $('#port').val('manual').trigger('change');
+        // Real device: make sure a stale virtual flag cannot leak into
+        // this connection attempt.
+        CONFIGURATOR.virtualMode = false;
     }
 
     GUI.log(i18n.getMessage('connecting'));
@@ -273,8 +290,9 @@ function normalizeSerial(list) {
     });
 
     // Virtual FC entry, shown when virtual test mode is enabled in options
-    // or when the port picker exposes it (dev builds)
-    if (CONFIGURATOR.virtualMode || $('#port option[value="virtual"]').length) {
+    // (persisted in config), when the flag is active, or when the port
+    // picker exposes it (dev builds)
+    if (config.get('virtualTestMode') || CONFIGURATOR.virtualMode || $('#port option[value="virtual"]').length) {
         result.push({
             path: 'virtual',
             name: i18n.getMessage('portsSelectVirtual'),
