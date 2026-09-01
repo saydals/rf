@@ -17,6 +17,7 @@
   import { MSPCodes } from "@/js/msp/MSPCodes.js";
   import { mspHelper } from "@/js/msp/MSPHelper.js";
   import { bit_check, reinitialiseConnection } from "@/js/serial_backend.js";
+  import { showSaveStatusDialog } from "@/js/main.js";
   import { windowWatcherUtil } from "@/js/utils/window_watchers.js";
 
   import ChannelAssignment from "./ChannelAssignment/ChannelAssignment.svelte";
@@ -81,6 +82,7 @@
   });
 
   export async function onSave() {
+    const saveDialog = showSaveStatusDialog('saving');
     function save(code) {
       return MSP.promise(code, mspHelper.crunch(code));
     }
@@ -93,6 +95,7 @@
     await save(MSPCodes.MSP_SET_FEATURE_CONFIG);
 
     await MSP.promise(MSPCodes.MSP_EEPROM_WRITE);
+    saveDialog.success();
     GUI.log($i18n.t("eepromSaved"));
     MSP.send_message(MSPCodes.MSP_SET_REBOOT);
     GUI.log($i18n.t("deviceRebooting"));

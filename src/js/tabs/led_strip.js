@@ -4,6 +4,7 @@ import { i18n } from "@/js/localization.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
+import { showSaveStatusDialog } from "@/js/main.js";
 
 import { TABS } from "./tabs.js";
 
@@ -31,12 +32,14 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         mspHelper.sendLedStripConfig(() =>
         mspHelper.sendLedStripColors(() =>
         mspHelper.sendLedStripModeColors(() =>
         mspHelper.sendLedStripSettings(() =>
         MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, () =>
         {
+            saveDialog.success();
             GUI.log(i18n.getMessage('eepromSaved'));
             callback?.();
         }

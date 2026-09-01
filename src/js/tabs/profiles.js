@@ -13,6 +13,7 @@ import { i18n } from "@/js/localization.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
+import { generateFilename, showSaveStatusDialog } from "@/js/main.js";
 
 import { TABS } from "./tabs.js";
 
@@ -77,6 +78,7 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         Promise.resolve(true)
             .then(() => MSP.promise(MSPCodes.MSP_SET_PID_TUNING, mspHelper.crunch(MSPCodes.MSP_SET_PID_TUNING)))
             .then(() => MSP.promise(MSPCodes.MSP_SET_PID_PROFILE, mspHelper.crunch(MSPCodes.MSP_SET_PID_PROFILE)))
@@ -85,6 +87,7 @@ tab.initialize = function (callback) {
             .then(() => MSP.promise(MSPCodes.MSP_SET_GOVERNOR_CONFIG, mspHelper.crunch(MSPCodes.MSP_SET_GOVERNOR_CONFIG)))
             .then(() => MSP.promise(MSPCodes.MSP_EEPROM_WRITE))
             .then(() => {
+                saveDialog.success();
                 self.savedProfile = self.currentProfile;
                 GUI.log(i18n.getMessage('eepromSaved'));
                 callback?.();

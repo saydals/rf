@@ -6,7 +6,7 @@ import { API_VERSION_12_8 } from "@/js/configurator.svelte.js";
 import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
-import { getFloatValue, getIntegerValue, getNumberInput } from "@/js/main.js";
+import { getFloatValue, getIntegerValue, getNumberInput, showSaveStatusDialog } from "@/js/main.js";
 import { Mixer } from "@/js/Mixer.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
@@ -69,6 +69,7 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         function send_mixer_config() {
             if (self.MIXER_CONFIG_dirty)
                 MSP.send_message(MSPCodes.MSP_SET_MIXER_CONFIG, mspHelper.crunch(MSPCodes.MSP_SET_MIXER_CONFIG), false, send_mixer_input1);
@@ -112,6 +113,7 @@ tab.initialize = function (callback) {
                 save_done();
         }
         function eeprom_saved() {
+            saveDialog.success();
             GUI.log(i18n.getMessage('eepromSaved'));
             self.needSave = false;
             save_done();

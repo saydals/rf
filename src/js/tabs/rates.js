@@ -8,7 +8,7 @@ import {
 import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
-import { getFloatValue, getIntegerValue } from "@/js/main.js";
+import { getFloatValue, getIntegerValue, showSaveStatusDialog } from "@/js/main.js";
 import { Model } from "@/js/model.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
@@ -271,10 +271,12 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         Promise.resolve(true)
             .then(() => MSP.promise(MSPCodes.MSP_SET_RC_TUNING, mspHelper.crunch(MSPCodes.MSP_SET_RC_TUNING)))
             .then(() => MSP.promise(MSPCodes.MSP_EEPROM_WRITE))
             .then(() => {
+                saveDialog.success();
                 self.savedRateProfile = self.currentRateProfile;
                 GUI.log(i18n.getMessage('eepromSaved'));
                 callback?.();

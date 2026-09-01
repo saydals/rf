@@ -6,7 +6,7 @@ import { Features } from "@/js/features.svelte.js";
 import * as flightStats from "@/js/flight-stats.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
-import { getIntegerValue, updateTabList } from "@/js/main.js";
+import { getIntegerValue, updateTabList, showSaveStatusDialog } from "@/js/main.js";
 import { Model } from "@/js/model.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
@@ -349,8 +349,10 @@ tab.initialize = function (callback) {
             await save(MSPCodes.MSP_SET_FLIGHT_STATS);
         }
 
+        const saveDialog = showSaveStatusDialog('saving');
         await MSP.promise(MSPCodes.MSP_EEPROM_WRITE);
 
+        saveDialog.success();
         GUI.log(i18n.getMessage('eepromSaved'));
         MSP.send_message(MSPCodes.MSP_SET_REBOOT);
         GUI.log(i18n.getMessage('deviceRebooting'));

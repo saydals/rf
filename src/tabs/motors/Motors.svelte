@@ -13,6 +13,7 @@
   import { MSPCodes } from "@/js/msp/MSPCodes.js";
   import { mspHelper } from "@/js/msp/MSPHelper.js";
   import { reinitialiseConnection } from "@/js/serial_backend";
+  import { showSaveStatusDialog } from "@/js/main.js";
 
   import Motor from "./Motor.svelte";
   import Override from "./Override.svelte";
@@ -84,6 +85,7 @@
   });
 
   export async function onSave() {
+    const saveDialog = showSaveStatusDialog('saving');
     motorState.overrideEnabled = false;
     await mspHelper.resetMotorOverrides();
 
@@ -96,6 +98,7 @@
     await save(MSPCodes.MSP_SET_ESC_SENSOR_CONFIG);
 
     await MSP.promise(MSPCodes.MSP_EEPROM_WRITE);
+    saveDialog.success();
     GUI.log($i18n.t("eepromSaved"));
     MSP.send_message(MSPCodes.MSP_SET_REBOOT);
     GUI.log($i18n.t("deviceRebooting"));

@@ -4,6 +4,7 @@ import { i18n } from "@/js/localization.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
+import { showSaveStatusDialog } from "@/js/main.js";
 import { reinitialiseConnection } from "@/js/serial_backend";
 
 import { TABS } from "./tabs.js";
@@ -29,10 +30,12 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         Promise.resolve(true)
             .then(() => MSP.promise(MSPCodes.MSP_SET_GPS_CONFIG, mspHelper.crunch(MSPCodes.MSP_SET_GPS_CONFIG)))
             .then(() => MSP.promise(MSPCodes.MSP_EEPROM_WRITE))
             .then(() => {
+                saveDialog.success();
                 GUI.log(i18n.getMessage('eepromSaved'));
                 MSP.send_message(MSPCodes.MSP_SET_REBOOT);
                 GUI.log(i18n.getMessage('deviceRebooting'));

@@ -5,7 +5,7 @@ import { API_VERSION_12_9 } from '../configurator.svelte.js';
 import { FC } from "@/js/fc.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
-import { getIntegerValue } from "@/js/main.js";
+import { getIntegerValue, showSaveStatusDialog } from "@/js/main.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
@@ -48,8 +48,10 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         mspHelper.sendServoConfigurations(function () {
             MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, function () {
+                saveDialog.success();
                 GUI.log(i18n.getMessage('eepromSaved'));
                 if (self.needReboot) {
                     MSP.send_message(MSPCodes.MSP_SET_REBOOT);

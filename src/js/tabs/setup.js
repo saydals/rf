@@ -6,6 +6,7 @@ import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
 import { have_sensor, reinitialiseConnection } from "@/js/serial_backend";
+import { showSaveStatusDialog } from "@/js/main.js";
 
 import { TABS } from "./tabs.js";
 
@@ -122,7 +123,9 @@ tab.initialize = function (callback) {
         });
 
         $('a.saveSettings').click(function () {
+            const saveDialog = showSaveStatusDialog('saving');
             MSP.send_message(MSPCodes.MSP_EEPROM_WRITE, false, false, function () {
+                saveDialog.success();
                 GUI.log(i18n.getMessage('initialSetupSettingsSaved'));
                 GUI.tab_switch_reload();
             });

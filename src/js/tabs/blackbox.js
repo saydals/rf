@@ -10,7 +10,7 @@ import { FC } from "@/js/fc.svelte.js";
 import * as filesystem from "@/js/filesystem.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
-import { generateFilename, showErrorDialog } from "@/js/main.js";
+import { generateFilename, showErrorDialog, showSaveStatusDialog } from "@/js/main.js";
 import { MSP } from "@/js/msp.svelte.js";
 import { MSPCodes } from "@/js/msp/MSPCodes.js";
 import { mspHelper } from "@/js/msp/MSPHelper.js";
@@ -209,11 +209,13 @@ tab.initialize = function (callback) {
     }
 
     function save_data(callback) {
+        const saveDialog = showSaveStatusDialog('saving');
         Promise.resolve(true)
             .then(() => MSP.promise(MSPCodes.MSP_SET_DEBUG_CONFIG, mspHelper.crunch(MSPCodes.MSP_SET_DEBUG_CONFIG)))
             .then(() => MSP.promise(MSPCodes.MSP_SET_BLACKBOX_CONFIG, mspHelper.crunch(MSPCodes.MSP_SET_BLACKBOX_CONFIG)))
             .then(() => MSP.promise(MSPCodes.MSP_EEPROM_WRITE))
             .then(() => {
+                saveDialog.success();
                 GUI.log(i18n.getMessage('eepromSaved'));
                 MSP.send_message(MSPCodes.MSP_SET_REBOOT);
                 GUI.log(i18n.getMessage('deviceRebooting'));
