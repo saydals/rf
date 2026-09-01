@@ -101,10 +101,5 @@
     margin-bottom: 0.5em;
 }
 
-@media all and (max-width: 575px) {
-    .tab-setup dialog {
-        width: calc(100% - 2em);
-        border-radius: unset;
-    }
-}
+/* Phone width handled by the compact popup dialog rules in main.css */
 

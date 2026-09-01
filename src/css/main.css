@@ -1743,15 +1743,15 @@ li.active .ic_cli {
 }
 
 .ic_connect {
-    background-image: url(/images/icons/connect_icon.svg);
+    background-image: url(/images/icons/connect2.svg);
 }
 
 .ic_connect:hover {
-    background-image: url(/images/icons/connect_icon.svg);
+    background-image: url(/images/icons/connect2.svg);
 }
 
 li.active .ic_connect {
-    background-image: url(/images/icons/connect_icon.svg);
+    background-image: url(/images/icons/connect2.svg);
 }
 
 .ic_motor {
@@ -1983,9 +1983,13 @@ dialog {
 }
 
 @media all and (max-width: 575px) {
+    /* Portrait phones: cap the dialog at its desktop width instead of
+       stretching it to (almost) the full window width, and keep the
+       rounded corners so it still looks like a popup. The three action
+       buttons simply wrap onto extra rows on narrow screens. */
     .dialogTabExit {
-        width: calc(100% - 2em);
-        border-radius: unset;
+        width: min(40em, calc(100% - 2em));
+        border-radius: 5px;
     }
 }
 
@@ -2093,7 +2097,11 @@ dialog .dialog_toolbar .btn a.disabled {
 }
 
 @media all and (max-width: 575px) {
-    dialog {
+    /* Full-screen "sheet" layout for the big tab dialogs on phones.
+       Small popup dialogs (.dialogSaveStatus, .dialogTabExit) are
+       excluded on purpose: they are short messages / questions that
+       must stay compact instead of covering the whole window. */
+    dialog:not(.dialogSaveStatus):not(.dialogTabExit) {
         position: fixed;
         width: calc(100% - 2em) !important;
         height: auto !important;
@@ -2101,6 +2109,36 @@ dialog .dialog_toolbar .btn a.disabled {
         top: 56px;
         border-radius: unset;
         border: none;
+        overflow: auto;
+    }
+}
+
+@media all and (max-width: 575px) {
+    /* Small confirmation / status popups (copy profile, reset profile,
+       reset settings, arming confirm, CLI exit, dataflash erase/save,
+       firmware ack, update notice, connect warning, errors): keep them
+       compact and centered instead of stretching over the whole window
+       like the big tab dialogs above. */
+    .dialogCopyProfile,
+    .dialogMixerReset,
+    .dialogConfirmReset,
+    .dialogConfirmArming,
+    .dialogCLIExit,
+    .dataflash-confirm-erase,
+    .dataflash-saving,
+    .dialogUnstableFirmwareAcknoledgement,
+    .dialogConfiguratorUpdate,
+    .dialogConnectWarning,
+    .dialogError {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: min(40em, calc(100% - 2em)) !important;
+        height: fit-content !important;
+        max-height: 100%;
+        margin: auto;
+        border-radius: 5px;
+        border: 1px solid silver;
         overflow: auto;
     }
 }

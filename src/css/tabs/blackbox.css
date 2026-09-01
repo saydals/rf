@@ -139,12 +139,7 @@
     margin-bottom: 0.5em;
 }
 
-@media all and (max-width: 575px) {
-    .tab-blackbox dialog {
-        width: calc(100% - 2em);
-        border-radius: unset;
-    }
-}
+/* Phone width handled by the compact popup dialog rules in main.css */
 
 .dataflash-confirm-erase .dataflash-erase-progress {
     height: 125px;

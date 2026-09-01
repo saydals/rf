@@ -251,9 +251,5 @@
     margin: 4px 0 0;
 }
 
-@media all and (max-width: 575px) {
-    .tab-mixer dialog {
-        width: calc(100% - 2em);
-        border-radius: unset;
-    }
-}
+/* Phone width handled by the compact popup dialog rules in main.css */
+

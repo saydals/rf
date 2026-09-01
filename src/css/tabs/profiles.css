@@ -263,12 +263,7 @@ html[data-theme="dark"] .tab-profiles .pid_table tr.pid_titlebar th {
     width: 120px;
 }
 
-@media all and (max-width: 575px) {
-    .tab-profiles dialog {
-        width: calc(100% - 2em);
-        border-radius: unset;
-    }
-}
+/* Phone width handled by the compact popup dialog rules in main.css */
 
 
 @media only screen and (max-width: 1205px) {
