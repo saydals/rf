@@ -1,5 +1,6 @@
 import { DarkTheme } from "@/js/DarkTheme.js";
 import * as config from "@/js/config.js";
+import { CONFIGURATOR } from "@/js/configurator.svelte.js";
 import { GUI } from "@/js/gui.js";
 import { i18n } from "@/js/localization.js";
 import { checkForConfiguratorUpdates, setDarkTheme } from "@/js/main.js";
@@ -15,6 +16,7 @@ const tab = {
       i18n.localizePage();
 
       this.initUserLanguage();
+      this.initVirtualTestMode();
       this.initRememberLastTab();
       this.initCheckForConfiguratorUnstableVersions();
       this.initAutoConnectConnectionTimeout();
@@ -62,6 +64,16 @@ const tab = {
       i18n.changeLanguage($(this).val());
       i18n.localizePage(true);
     });
+  },
+
+  initVirtualTestMode() {
+    $("#opt-virtual-test-mode")
+      .prop("checked", config.get("virtualTestMode") ?? false)
+      .on("change", function () {
+        const checked = $(this).is(":checked");
+        config.set({ virtualTestMode: checked });
+        CONFIGURATOR.virtualMode = checked;
+      });
   },
 
   initRememberLastTab() {

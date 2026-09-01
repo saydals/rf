@@ -272,8 +272,9 @@ function normalizeSerial(list) {
         });
     });
 
-    // Virtual FC entry, only offered when the port picker exposes it (dev builds)
-    if ($('#port option[value="virtual"]').length) {
+    // Virtual FC entry, shown when virtual test mode is enabled in options
+    // or when the port picker exposes it (dev builds)
+    if (CONFIGURATOR.virtualMode || $('#port option[value="virtual"]').length) {
         result.push({
             path: 'virtual',
             name: i18n.getMessage('portsSelectVirtual'),

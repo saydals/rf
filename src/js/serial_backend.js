@@ -69,10 +69,15 @@ export async function handleConnectClick() {
                     }
                 }, 15000);
 
-                if (selectedPort.data().isVirtual) {
+                if (CONFIGURATOR.virtualMode || selectedPort.data().isVirtual) {
                     CONFIGURATOR.virtualMode = true;
-                    CONFIGURATOR.virtualApiVersion = $('#firmware-version-dropdown :selected').val();
-                    CONFIGURATOR.virtualFwVersion = $('#firmware-version-dropdown :selected').data('fw');
+                    if (selectedPort.data().isVirtual) {
+                        CONFIGURATOR.virtualApiVersion = $('#firmware-version-dropdown :selected').val();
+                        CONFIGURATOR.virtualFwVersion = $('#firmware-version-dropdown :selected').data('fw');
+                    } else {
+                        CONFIGURATOR.virtualApiVersion = '12.9.0';
+                        CONFIGURATOR.virtualFwVersion = '4.6.0';
+                    }
 
                     serial.connect('virtual', {}, onOpenVirtual);
                 } else if (selectedPort.data().isBLE) {

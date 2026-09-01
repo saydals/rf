@@ -133,6 +133,11 @@
         "english": "Virtual Mode (Experimental)",
         "description": "Configure a Virtual Flight Controller without the need of a physical FC."
     },
+
+    "virtualTestMode": {
+        "message": "Virtual Test Mode",
+        "description": "Enable virtual flight controller connection for testing without hardware."
+    },
     "virtualMSPVersion": {
         "message": "Виртуална версия на фърмуера",
         "english": "Virtual Firmware Version"
