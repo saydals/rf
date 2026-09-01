@@ -106,7 +106,7 @@ public class NordicBlePlugin extends CordovaPlugin {
 
     static {
         addDevice("CC2541",         SERVICE_CC2541,         WRITE_CC2541,         NOTIFY_CC2541);
-        addDevice("BT04",           SERVICE_BT04,           WRITE_BT04,           NOTIFY_BT04);
+        addDevice("BT04-E",         SERVICE_BT04,           WRITE_BT04,           NOTIFY_BT04);
         addDevice("HC-05",          SERVICE_HC05,           WRITE_HC05,           NOTIFY_HC05);
         addDevice("HM-10",          SERVICE_HM10,           WRITE_HM10,           NOTIFY_HM10);
         addDevice("HM-11",          SERVICE_NORDIC_NUS,     NOTIFY_NORDIC_NUS,    WRITE_NORDIC_NUS);

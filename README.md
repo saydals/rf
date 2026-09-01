@@ -19,6 +19,8 @@ The latest Android APK build is available here:
 **Notes**
 
 > When connecting to a BLE module such as SpeedyBee, a "Data loading" popup may appear; depending on the situation it can take anywhere from a few seconds to tens of seconds. While background data is still being received, touching the screen will simply dismiss it. Force-closing it and then switching tabs greatly increases the risk of a crash. BLE module speeds vary — SpeedyBee is a module optimized for Betaflight, so for Rotorflight we recommend using a different BLE module instead. SPP remains the better choice.
+>
+> 2026-9-1 일 패치로 BLE 속도가 SPP에 근접하게 빨라졌습니다.  
 
 The actual core functionality is unchanged — only the connection part and the UI were modified, so there should be no functional errors. To make better use of the narrow screen, unnecessary elements are hidden.
 
@@ -60,16 +62,13 @@ crafts or airplanes; it's exclusively designed for RC helicopters.
 
 This version of Rotorflight is also known as **Rotorflight 2** or **RF2**.
 
-
 ## Information
 
 Tutorials, documentation, and flight videos can be found on the [Rotorflight website](https://www.rotorflight.org/).
 
-
 ## Installation
 
 Please download the latest version from [github](https://github.com/rotorflight/rotorflight-configurator/releases/).
-
 
 ## Features
 
@@ -105,7 +104,6 @@ Plus lots of features inherited from Betaflight:
 
 And many more...
 
-
 ## Notes
 
 #### Windows
@@ -129,7 +127,6 @@ sudo usermod -aG dialout ${USER}
 
 If you experience graphics display problems or smudged/dithered fonts display issues in Rotorflight Configurator, try invoking the `rotorflight-configurator` executable file with the `--disable-gpu` command line switch. This will switch off hardware graphics acceleration. Likewise, setting your graphics card antialiasing option to OFF (e.g. FXAA parameter on NVidia graphics cards) might be a remedy as well.
 
-
 ## Contributing
 
 Rotorflight is an open-source community project. Anybody can join in and help to make it better by:
@@ -142,7 +139,6 @@ Rotorflight is an open-source community project. Anybody can join in and help to
 * [contributing](https://www.rotorflight.org/docs/Contributing/intro) to the software development - fixing bugs, implementing new features and improvements
 * [translating](https://www.rotorflight.org/docs/Contributing/intro#translations) Rotorflight Configurator into a new language, or helping to maintain an existing translation
 
-
 ## Origins
 
 Rotorflight is software that is **open source** and is available free of charge without warranty.
@@ -151,7 +147,6 @@ Rotorflight is forked from [Betaflight](https://github.com/betaflight), which in
 Rotorflight borrows ideas and code also from [HeliFlight3D](https://github.com/heliflight3d/), another Betaflight fork for helicopters.
 
 Big thanks to everyone who has contributed along the journey!
-
 
 ## Contact
 

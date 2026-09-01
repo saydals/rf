@@ -28,7 +28,7 @@ const SERVICE_UUIDS = [
     '0000ffe0-0000-1000-8000-00805f9b34fb', // CC2541
     '00001101-0000-1000-8000-00805f9b34fb', // HC-05
     '0000ffe1-0000-1000-8000-00805f9b34fb', // HM-10
-    '0000ffe2-0000-1000-8000-00805f9b34fb', // BT04 (HM-10 clone; resolves by advertised name)
+    '0000ffe0-0000-1000-8000-00805f9b34fb', // BT04-E (HM-10 clone; resolves by advertised name)
     '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // HM-11 / Nordic NRF UART
     '00001000-0000-1000-8000-00805f9b34fb', // SpeedyBee V1
     '0000abf0-0000-1000-8000-00805f9b34fb', // SpeedyBee V2
