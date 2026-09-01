@@ -2030,6 +2030,16 @@ dialog {
     color: #721c24;
 }
 
+/* Close button: only shown in the error state so the user can dismiss
+   the "Save failed" dialog and return to normal input mode. */
+.dialogSaveStatus #save-status-close {
+    display: none;
+}
+
+.dialogSaveStatus.error #save-status-close {
+    display: inline-block;
+}
+
 @media all and (max-width: 575px) {
     .dialogSaveStatus {
         width: calc(100% - 2em);

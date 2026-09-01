@@ -566,21 +566,44 @@ export function showErrorDialog(message) {
    dialog.showModal();
 }
 
+let saveStatusTimeout = null;
+
 export function showSaveStatusDialog(status) {
     const dialog = $('.dialogSaveStatus')[0];
     const title = $('#save-status-title');
     const message = $('#save-status-message');
 
     dialog.classList.remove('saving', 'success', 'error');
+    clearTimeout(saveStatusTimeout);
+
+    // Close button (visible only in the error state, see CSS): dismiss
+    // the dialog and return to normal input mode.
+    $('#save-status-close').off('click').on('click', function (e) {
+        e.preventDefault();
+        clearTimeout(saveStatusTimeout);
+        dialog.close();
+    });
 
     if (status === 'saving') {
         title.text(i18n.getMessage('saveStatusSaving'));
         message.text('');
         dialog.classList.add('saving');
         dialog.showModal();
+        // Watchdog: on some transports (wireless links, the LED Strip tab
+        // in particular) the FC acknowledgment may never arrive, leaving
+        // the "Saving settings to FC..." modal open forever. If nothing
+        // happened after 5 seconds, switch to the existing "Save failed"
+        // state so the user can close the dialog and continue.
+        saveStatusTimeout = setTimeout(function () {
+            dialog.classList.remove('saving');
+            dialog.classList.add('error');
+            title.text(i18n.getMessage('saveStatusError'));
+            message.text('');
+        }, 5000);
         return {
             success: function() {
-                dialog.classList.remove('saving');
+                clearTimeout(saveStatusTimeout);
+                dialog.classList.remove('saving', 'error');
                 dialog.classList.add('success');
                 title.text(i18n.getMessage('saveStatusSuccess'));
                 message.text('');
@@ -589,11 +612,14 @@ export function showSaveStatusDialog(status) {
                 }, 1500);
             },
             error: function() {
+                clearTimeout(saveStatusTimeout);
                 dialog.classList.remove('saving');
                 dialog.classList.add('error');
                 title.text(i18n.getMessage('saveStatusError'));
                 message.text('');
-                dialog.showModal();
+                if (!dialog.open) {
+                    dialog.showModal();
+                }
             },
         };
     }
@@ -613,7 +639,9 @@ export function showSaveStatusDialog(status) {
         dialog.classList.add('error');
         title.text(i18n.getMessage('saveStatusError'));
         message.text('');
-        dialog.showModal();
+        if (!dialog.open) {
+            dialog.showModal();
+        }
         return;
     }
 }
