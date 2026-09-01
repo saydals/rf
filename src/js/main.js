@@ -618,4 +618,40 @@ export function showSaveStatusDialog(status) {
     }
 }
 
-export function showTabExitDialog(tab, callback) { return tab.revert(callback); }
+export function showTabExitDialog(tab, callback) {
+    const dialog = $('.dialogTabExit')[0];
+
+    // Neither save nor revert available: nothing to ask about.
+    if (!tab.save && !tab.revert) {
+        callback?.();
+        return;
+    }
+
+    // Force an explicit choice: do not let ESC/back close the dialog
+    // without continuing the tab switch.
+    $(dialog).off('cancel').on('cancel', function (e) {
+        e.preventDefault();
+    });
+
+    $('#tab-exit-save').off('click').on('click', function (e) {
+        e.preventDefault();
+        dialog.close();
+        // OK: save the changes first, then continue the pending action
+        // (tab switch / profile switch). tab.save() shows its own
+        // "Saving..." dialog and continues on FC acknowledgment.
+        if (tab.save) {
+            tab.save(() => callback?.());
+        } else {
+            tab.revert(() => callback?.());
+        }
+    });
+
+    $('#tab-exit-no').off('click').on('click', function (e) {
+        e.preventDefault();
+        dialog.close();
+        // No: discard the changes and just continue.
+        tab.revert?.(() => callback?.());
+    });
+
+    dialog.showModal();
+}

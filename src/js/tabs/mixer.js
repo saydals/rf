@@ -594,13 +594,28 @@ tab.initialize = function (callback) {
         };
 
         self.revert = function (callback) {
+            // Discard all pending changes and restore the values the FC
+            // currently has. This must NOT send anything to the FC —
+            // previously it called save_data(), which actually SAVED the
+            // mixer config AND left the "Saving..." modal dialog open
+            // forever (saveDialog.success() was never reached because
+            // needSave was forced to false), freezing the app when
+            // leaving the tab with unsaved changes.
             FC.MIXER_CONFIG = self.origMixerConfig;
             FC.MIXER_INPUTS = self.origMixerInputs;
+            FC.MIXER_RULES  = self.origMixerRules;
 
             self.needSave = false;
             self.needReboot = false;
+            self.MIXER_CONFIG_dirty = false;
+            self.MIXER_INPUT1_dirty = false;
+            self.MIXER_INPUT2_dirty = false;
+            self.MIXER_INPUT3_dirty = false;
+            self.MIXER_INPUT4_dirty = false;
+            self.MIXER_RULES_dirty = false;
+            self.isDirty = false;
 
-            save_data(callback);
+            callback?.();
         };
 
         $('a.save').click(function () {
