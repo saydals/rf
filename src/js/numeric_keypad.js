@@ -98,13 +98,17 @@ export function installNumericKeypad() {
         try {
             ensureBottomSpace();
             const padH = PADH || 230;
-            const limit = window.innerHeight - padH - 8 - 24;
+            const visH = window.innerHeight;
+            const minVisible = 32;
+            const safeTop = Math.max(8, Math.min(visH * 0.4, 80));
+            const limit = Math.max(safeTop, visH - padH - 8 - 24);
+            const limitLow = Math.max(minVisible, limit);
             const sp = getScrollContainer(el);
             const scroller = sp || document.scrollingElement || document.documentElement;
             const rect = el.getBoundingClientRect();
             let delta = 0;
-            if (rect.bottom > limit) delta = rect.bottom - limit;
-            else if (rect.top < 0) delta = rect.top;
+            if (rect.bottom > limitLow) delta = rect.bottom - limitLow;
+            else if (rect.top < safeTop) delta = rect.top - safeTop;
             else return;
             if (delta > 0 && bottomSpacer) {
                 const want = Math.ceil(delta) + 120;
@@ -116,7 +120,7 @@ export function installNumericKeypad() {
             setTimeout(() => {
                 try {
                     const r2 = el.getBoundingClientRect();
-                    const stillLow = r2.bottom - limit;
+                    const stillLow = r2.bottom - limitLow;
                     if (stillLow > 4) {
                         if (bottomSpacer && (parseFloat(bottomSpacer.style.height) || 0) < stillLow + 120) {
                             bottomSpacer.style.height = Math.ceil(stillLow + 120) + 'px';
@@ -130,14 +134,30 @@ export function installNumericKeypad() {
     }
 
     let PADH = 230;
+    function clampPadPosition(x, y) {
+        const padW = pad.offsetWidth || 300;
+        const padHNow = pad.offsetHeight || PADH || 230;
+        const maxX = Math.max(0, window.innerWidth - padW - 8);
+        const maxY = Math.max(0, window.innerHeight - padHNow - 8);
+        return {
+            x: Math.min(Math.max(8, x | 0), maxX),
+            y: Math.min(Math.max(8, y | 0), maxY),
+        };
+    }
     function applySavedPosition() {
         let saved = null;
         try { saved = config.get('numericPadPos'); } catch {}
         if (saved && typeof saved.x === 'number' && typeof saved.y === 'number') {
+            const pos = clampPadPosition(saved.x, saved.y);
             pad.style.right = 'auto';
             pad.style.bottom = 'auto';
-            pad.style.left = saved.x + 'px';
-            pad.style.top = saved.y + 'px';
+            pad.style.left = pos.x + 'px';
+            pad.style.top = pos.y + 'px';
+        } else {
+            pad.style.left = 'auto';
+            pad.style.top = 'auto';
+            pad.style.right = '8px';
+            pad.style.bottom = '8px';
         }
     }
     function show(el) {
@@ -226,6 +246,9 @@ export function installNumericKeypad() {
     }
     function holding() { return !!(holdTO || holdIV); }
 
+    pad.addEventListener('pointerdown', e => {
+        if (hideTO) { clearTimeout(hideTO); hideTO = null; hideEl = null; }
+    });
     pad.addEventListener('pointerdown', e => e.preventDefault());
     pad.addEventListener('pointerdown', e => {
         const b = e.target.closest('button[data-k]');
@@ -244,6 +267,7 @@ export function installNumericKeypad() {
     window.addEventListener('pointerup', () => { if (holding()) stopHold(); });
 
     pad.addEventListener('click', e => {
+        if (hideTO) { clearTimeout(hideTO); hideTO = null; hideEl = null; }
         const b = e.target.closest('button[data-k]');
         if (!b) return;
         const k = b.dataset.k;
@@ -269,10 +293,9 @@ export function installNumericKeypad() {
     handle.addEventListener('pointermove', e => {
         if (!drag) return;
         let x = e.clientX - drag.dx, y = e.clientY - drag.dy;
-        x = Math.max(0, Math.min(window.innerWidth - 40, x));
-        y = Math.max(0, Math.min(window.innerHeight - 40, y));
-        pad.style.left = x + 'px';
-        pad.style.top = y + 'px';
+        const pos = clampPadPosition(x, y);
+        pad.style.left = pos.x + 'px';
+        pad.style.top = pos.y + 'px';
     });
     const endDrag = () => {
         if (!drag) return;
@@ -355,7 +378,27 @@ export function installNumericKeypad() {
         '#rf-numpad button[data-k="DONE"]{grid-column:auto;color:#fff;font-weight:bold;}',
         '.rf-editing{border-color:var(--accent,hsl(202,100%,45%))!important;background:#cfe5ff!important;color:#000!important;}',
         'input[type="number"].rf-editing::-webkit-inner-spin-button,',
-        'input[type="number"].rf-editing::-webkit-outer-spin-button{ -webkit-appearance:none;margin:0; }'
+        'input[type="number"].rf-editing::-webkit-outer-spin-button{ -webkit-appearance:none;margin:0; }',
+        '@media (orientation:landscape) and (max-height:480px){',
+        '#rf-numpad{padding:6px;max-width:min(60vw,300px);border-radius:10px;}',
+        '#rf-numpad .rfnp-handle{height:14px;margin:-3px -3px 4px;font-size:12px;letter-spacing:2px;}',
+        '#rf-numpad .rfnp-grid{gap:4px;}',
+        '#rf-numpad button{min-width:48px;height:32px;font-size:16px;border-radius:6px;}',
+        '}'
     ].join('');
     (document.head || document.documentElement).appendChild(css);
+
+    function reClampVisible() {
+        if (pad.style.display === 'none') return;
+        if (pad.style.left && pad.style.left !== 'auto') {
+            const curX = parseInt(pad.style.left) || 0;
+            const curY = parseInt(pad.style.top) || 0;
+            const pos = clampPadPosition(curX, curY);
+            pad.style.left = pos.x + 'px';
+            pad.style.top = pos.y + 'px';
+        }
+        if (target) ensureFieldVisible(target);
+    }
+    window.addEventListener('resize', reClampVisible);
+    window.addEventListener('orientationchange', reClampVisible);
 }
