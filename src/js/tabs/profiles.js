@@ -580,14 +580,12 @@ tab.initialize = function (callback) {
             });
         }
 
+        $('.tab-profiles tr.yawFFImpulseGain').show();
+        $('.tab-profiles tr.yawFFImpulseDecay').show();
         if (semver.gte(FC.CONFIG.apiVersion, API_VERSION_12_8)) {
-            $('.tab-profiles tr.yawFFImpulseGain').hide();
-            $('.tab-profiles tr.yawFFImpulseDecay').hide();
             $('.tab-profiles tr.yaw_inertia_precomp_gain').show();
             $('.tab-profiles tr.yaw_inertia_precomp_cutoff').show();
         } else {
-            $('.tab-profiles tr.yawFFImpulseGain').show();
-            $('.tab-profiles tr.yawFFImpulseDecay').show();
             $('.tab-profiles tr.yaw_inertia_precomp_gain').hide();
             $('.tab-profiles tr.yaw_inertia_precomp_cutoff').hide();
         }
