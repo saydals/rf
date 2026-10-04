@@ -42,3 +42,4 @@ release-signing.properties
 
 # Kilo agent state (local only)
 .kilo/
+redist/
