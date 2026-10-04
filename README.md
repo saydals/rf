@@ -2,7 +2,7 @@
 
 The latest Android APK build is available here:
 
-[rf-cordova.apk](https://github.com/saydals/rf/raw/master/redist/rf-cordova.apk)
+[rf-cordova.apk](https://github.com/saydals/rf/releases)
 
 (Enable "Install unknown apps" on your device to install it.)
 
